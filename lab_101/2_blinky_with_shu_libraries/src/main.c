@@ -19,9 +19,12 @@
 #include "gpio.h"
 
 // map the led to GPIO PI1 (again, this is the inbuilt led)
-gpio_pin_t led1 = {PI_1, GPIOI, GPIO_PIN_1};		//Red LED
-gpio_pin_t led2 = {PB_14, GPIOB, GPIO_PIN_14};	//Amber LED
-gpio_pin_t led3 = {PB_15, GPIOB, GPIO_PIN_15};	//Green LED
+gpio_pin_t red1 = {PI_1, GPIOI, GPIO_PIN_1};		//Red LED 1
+gpio_pin_t amber1 = {PB_14, GPIOB, GPIO_PIN_14};	//Amber LED 1
+gpio_pin_t green1 = {PB_15, GPIOB, GPIO_PIN_15};	//Green LED 1
+gpio_pin_t red2 = {PC_7, GPIOC, GPIO_PIN_7};		//Red LED 2
+gpio_pin_t amber2 = {PC_6, GPIOC, GPIO_PIN_6};	//Amber LED 2
+gpio_pin_t green2 = {PG_6, GPIOG, GPIO_PIN_6};	//Green LED 2
 
 // this is the main method
 int main()
@@ -32,45 +35,81 @@ int main()
   init_sysclk_216MHz();
   
   // initialise the gpio pins
-  init_gpio(led1, OUTPUT);
-  init_gpio(led2, OUTPUT);
-	init_gpio(led3, OUTPUT);
-  
+  init_gpio(red1, OUTPUT);
+  init_gpio(amber1, OUTPUT);
+	init_gpio(green1, OUTPUT);
+  init_gpio(red2, OUTPUT);
+  init_gpio(amber2, OUTPUT);
+	init_gpio(green2, OUTPUT);
+	
+	//Preset Red on
+	toggle_gpio(red1);
+	
   // loop forever ...
   while(1)
   {
-    // red on
-    toggle_gpio(led1);
-    
-    // wait for 4 second
-    HAL_Delay(4000);
+		/*Cycle 1*/
+		//Green2 on
+		toggle_gpio(green2);
 		
-		// amber on
-		toggle_gpio(led2);
+		//Delay 2 seconds
+		HAL_Delay(2000);
 		
-		//delay 1 second
-		HAL_Delay(1000);
-			
-		//red off
-		toggle_gpio(led1);
-		//amber off		
-    toggle_gpio(led2);
-    //Green on
-		toggle_gpio(led3);
+		/*Cycle 2*/
+		//Green2 off
+		toggle_gpio(green2);
+		//Amber2 on
+		toggle_gpio(amber2);
 		
-    // wait for 3 second
-    HAL_Delay(3000);
+		//Delay 2 seconds
+		HAL_Delay(2000);
 		
-		//amber on		
-    toggle_gpio(led2);
-    //Green off
-		toggle_gpio(led3);
+		/*Cycle 3 */
+		//Amber 1 on
+		toggle_gpio(amber1);
+		//Red 2 on
+		toggle_gpio(red2);
+		//Amber 2 off
+		toggle_gpio(amber2);
 		
-		//delay 1 second
-		HAL_Delay(1000);
+		//Delay 2 seconds
+		HAL_Delay(2000);
 		
-		//amber off		
-    toggle_gpio(led2);
+		/*Cycle 4*/
+		//Green 1 on
+		toggle_gpio(green1);
+		//Red 1 off
+		toggle_gpio(red1);
+		//Amber 1 off
+		toggle_gpio(amber1);
 		
+		//Delay 2 seconds
+		HAL_Delay(2000);
+		
+		/*Cycle 5*/
+		//amber 1 on 
+		toggle_gpio(amber1);
+		//Green 1 off
+		toggle_gpio(green1);
+		
+		//Delay 2 seconds
+		HAL_Delay(2000);
+		
+		/*Cycle 6*/
+		//Red 1 on
+		toggle_gpio(red1);
+		//amber 1 off
+		toggle_gpio(amber1);
+		//Amber 2 on
+		toggle_gpio(amber2);
+		
+		//Delay 2 seconds
+		HAL_Delay(2000);
+		
+		/*Reset Cycle*/
+		//Amber 2 off
+		toggle_gpio(amber2);
+		//Red 2 off
+		toggle_gpio(red2);
   }
 }
