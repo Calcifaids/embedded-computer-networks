@@ -24,7 +24,7 @@
 
 // map the led to GPIO PA8 and the potentiometer to PA0
 gpio_pin_t led = {PI_1, GPIOI, GPIO_PIN_1};
-gpio_pin_t pot = {PF_8, GPIOF, GPIO_PIN_8};
+gpio_pin_t pot = {PF_8, GPIOF, GPIO_PIN_8};	//Actual pin is PF8 not PA0 as mentioned in notes/above
 
 // declare our utility functions
 void configure_gpio(void);
