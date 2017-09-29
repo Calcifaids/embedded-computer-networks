@@ -20,8 +20,13 @@
 
 // map the led to GPIO PI_1 (the inbuilt led) and the push button to PI_11 
 // (the user button)
-gpio_pin_t led = {PI_1, GPIOI, GPIO_PIN_1};
-gpio_pin_t pb1 = {PI_11, GPIOI, GPIO_PIN_11};
+gpio_pin_t led1 = {PI_1, GPIOI, GPIO_PIN_1};
+gpio_pin_t led2 = {PB_14, GPIOB, GPIO_PIN_14};
+gpio_pin_t pb1 = {PA_8, GPIOA, GPIO_PIN_8}; //Changed Pb pin as previously set to PI11
+
+unsigned long last_debounce;
+int current_state, last_state, button_state;
+int debounce_delay = 40;
 
 // this is the main method
 int main()
@@ -30,24 +35,40 @@ int main()
   // properly
   HAL_Init();
   init_sysclk_216MHz();
+	//HAL_GetTick();
+	
   
   // initialise the gpio pins
-  init_gpio(led, OUTPUT);
+  init_gpio(led1, OUTPUT);
+	init_gpio(led2, OUTPUT);
   init_gpio(pb1, INPUT);
-  
+	write_gpio(led1, HIGH);
+  write_gpio(led2, LOW);
   // loop forever ...
   while(1)
   {
-    // if the button is pressed ...
-    if(read_gpio(pb1))
-    {
-      // turn the led on on the gpio pin
-      write_gpio(led, HIGH);
-    }
-    else
-    {
-      // turn the led off on the gpio pin
-      write_gpio(led, LOW);
-    }
+		//Read pin state
+		current_state = read_gpio(pb1);
+		
+		//Check for fluctuation on pin
+		if (current_state != last_state){
+				last_debounce = HAL_GetTick();
+		}
+		
+
+		//Debounce check
+		if ((HAL_GetTick() - last_debounce) > debounce_delay){
+			//check if changed
+			if(current_state != button_state){
+				button_state = current_state;
+				//If latched then toggle leds
+				if(button_state == HIGH){
+						toggle_gpio(led1);
+						toggle_gpio(led2);
+				}
+			}
+		}
+		//store current state as last for beggining of next loop
+		last_state = current_state;
   }
 }
