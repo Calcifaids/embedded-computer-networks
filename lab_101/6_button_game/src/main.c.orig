@@ -48,7 +48,7 @@ int main()
   init_sysclk_216MHz();
   
   // initialise the uart and random number generator
-  init_uart(9600);
+  init_uart(115200);
   init_random();
   
   // set up the gpio
@@ -126,7 +126,7 @@ uint8_t get_led()
 
   // get a random number
   random_num = get_random_int();
-  printf("Random number = %d\r\n", (random_num % 2) + 1);
+  printf("Random number = %d\r\n", (random_num % 4));
 
   // use the random number to calculate which led to switch on
   current_led = (random_num % 2) + 1;
@@ -136,7 +136,7 @@ uint8_t get_led()
   }
   if(current_led == 2)
   {
-    write_gpio(led2, HIGH);
+    write_gpio(led2, LOW);
   }
 
   // return the chosen led
