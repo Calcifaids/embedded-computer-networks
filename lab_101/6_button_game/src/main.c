@@ -35,11 +35,15 @@ gpio_pin_t orangePush = {PG_7, GPIOG, GPIO_PIN_7};
 gpio_pin_t greenPush = {PI_0, GPIOI, GPIO_PIN_0};
 gpio_pin_t redPush = {PH_6, GPIOH, GPIO_PIN_6};
 gpio_pin_t yellowPush = {PI_3, GPIOI, GPIO_PIN_3};
+gpio_pin_t restartButton = {PF_6, GPIOF, GPIO_PIN_6};
 
 // local game functions
 uint8_t get_led(void);
 uint8_t get_guess(void);
+uint8_t resetLives(long timeStamp, int j);
+void loseFunc(void);
 void clear_leds(void);
+
 
 // CODE
 
@@ -56,15 +60,18 @@ int main()
   init_random();
   
   // set up the gpio
+	/*Output LED's*/
   init_gpio(orangeLed, 0);
   init_gpio(greenLed, 0);
 	init_gpio(redLed, 0);
   init_gpio(yellowLed, 0);
+	/*Input Buttons*/
   init_gpio(orangePush, 1);
   init_gpio(greenPush, 1);
 	init_gpio(redPush, 1);
   init_gpio(yellowPush, 1);
-  
+  init_gpio(restartButton, 1);
+	
   // print an initial status message
   printf("we are alive!\r\n");
   
@@ -77,7 +84,8 @@ int main()
   uint32_t  timeout = 3000;
   uint8_t   current_led = 0;
   uint8_t   guessed_led = 0;
-  
+  uint8_t		lives = 9;
+	unsigned long timeStamp = 0;
   // game loop ...
   
   // loop forever ...
@@ -108,14 +116,31 @@ int main()
         {
           // reset the timer and get a new led
           printf("sorry - you lose!\r\n");
-          current_led = get_led();
+					//Flash sequence
+					loseFunc();
+					lives --;
+					printf("Lives left = %d\r\n",lives);
+					printf("To restart please press the restart button in the next 2 seconds!\r\n");
+					timeStamp = HAL_GetTick();
+					lives = resetLives(timeStamp, lives);
+					current_led = get_led();
           current_time = HAL_GetTick();
         }
+				if (lives < 1){
+					printf("Game over!\r\n");
+					lives = 9;
+				}
       }
     }
 
     // we ran out of time
     printf("you ran out of time :(\r\n");
+		lives --;
+		printf("Lives left = %d\r\n",lives);
+		if (lives < 1){
+			printf("Game over!\r\n");
+			lives = 9;
+		}
   }
 }
 
@@ -198,4 +223,34 @@ void clear_leds()
   write_gpio(greenLed, LOW);
 	write_gpio(redLed, LOW);
 	write_gpio(yellowLed, LOW);
+}
+
+void loseFunc(){
+	clear_leds();
+	write_gpio(orangeLed, HIGH);
+	HAL_Delay(200);
+	write_gpio(greenLed, HIGH);
+	HAL_Delay(200);
+	write_gpio(redLed, HIGH);
+	HAL_Delay(200);
+	write_gpio(yellowLed, HIGH);
+	HAL_Delay(200);
+	write_gpio(orangeLed, LOW);
+	HAL_Delay(200);
+	write_gpio(greenLed, LOW);
+	HAL_Delay(200);
+	write_gpio(redLed, LOW);
+	HAL_Delay(200);
+	write_gpio(yellowLed, LOW);
+	HAL_Delay(200);
+}
+
+uint8_t resetLives(long i, int j){
+	//Could Do with timer
+	while(HAL_GetTick() > i + 2000){
+		if(read_gpio(restartButton) == HIGH){
+			j = 9;
+		}
+	}
+	return j;	
 }
