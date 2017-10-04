@@ -25,16 +25,12 @@
 // DECLARATIONS
 
 // leds
-gpio_pin_t orangeLed = {PI_1, GPIOI, GPIO_PIN_1};
-gpio_pin_t greenLed = {PB_14, GPIOB, GPIO_PIN_14};
-gpio_pin_t redLed = {PB_15, GPIOB, GPIO_PIN_15};
-gpio_pin_t yellowLed = {PA_8, GPIOA, GPIO_PIN_8};
+gpio_pin_t led1 = {PB_8, GPIOB, GPIO_PIN_8};
+gpio_pin_t led2 = {PB_9, GPIOB, GPIO_PIN_9};
 
 // buttons
-gpio_pin_t orangePush = {PG_7, GPIOG, GPIO_PIN_7};
-gpio_pin_t greenPush = {PI_0, GPIOI, GPIO_PIN_0};
-gpio_pin_t redPush = {PH_6, GPIOH, GPIO_PIN_6};
-gpio_pin_t yellowPush = {PI_3, GPIOI, GPIO_PIN_3};
+gpio_pin_t pb1 = {PC_6, GPIOC, GPIO_PIN_6};
+gpio_pin_t pb2 = {PC_7, GPIOC, GPIO_PIN_7};
 
 // local game functions
 uint8_t get_led(void);
@@ -56,14 +52,10 @@ int main()
   init_random();
   
   // set up the gpio
-  init_gpio(orangeLed, 0);
-  init_gpio(greenLed, 0);
-	init_gpio(redLed, 0);
-  init_gpio(yellowLed, 0);
-  init_gpio(orangePush, 1);
-  init_gpio(greenPush, 1);
-	init_gpio(redPush, 1);
-  init_gpio(yellowPush, 1);
+  init_gpio(led1, 0);
+  init_gpio(led2, 0);
+  init_gpio(pb1, 1);
+  init_gpio(pb2, 1);
   
   // print an initial status message
   printf("we are alive!\r\n");
@@ -134,24 +126,18 @@ uint8_t get_led()
 
   // get a random number
   random_num = get_random_int();
-  printf("Random number = %d\r\n", (random_num % 4) + 1);
+  printf("Random number = %d\r\n", (random_num % 2) + 1);
 
   // use the random number to calculate which led to switch on
-  current_led = (random_num % 4) + 1;
-	switch(current_led){
-		case 1:
-			write_gpio(orangeLed, HIGH);
-		break;
-		case 2:
-			write_gpio(greenLed, HIGH);
-		break;
-		case 3:
-			write_gpio(redLed, HIGH);
-		break;
-		case 4:
-			write_gpio(yellowLed, HIGH);
-		break;
-	}
+  current_led = (random_num % 2) + 1;
+  if(current_led == 1)
+  {
+    write_gpio(led1, HIGH);
+  }
+  if(current_led == 2)
+  {
+    write_gpio(led2, HIGH);
+  }
 
   // return the chosen led
   return current_led;
@@ -161,41 +147,28 @@ uint8_t get_led()
 uint8_t get_guess()
 {
   // initialise variables for the button states
-  uint8_t orangeButtonState = 0;
-  uint8_t greenButtonState = 0;
-	uint8_t interRedState = 0;
-	uint8_t redButtonState = 0;
-  uint8_t yellowButtonState = 0;
+  uint8_t button_1_state = 0;
+  uint8_t button_2_state = 0;
 
   // read the buttons
-  orangeButtonState = read_gpio(orangePush);
-  greenButtonState = read_gpio(greenPush);
-	redButtonState = read_gpio(redPush);
-	yellowButtonState = read_gpio(yellowPush);
+  button_1_state = read_gpio(pb1);
+  button_2_state = read_gpio(pb2);
   
   // wait for a short period of time
-  HAL_Delay(30);
+  HAL_Delay(25);
   
   // read the buttons again
-  orangeButtonState = orangeButtonState & read_gpio(orangePush);
-  greenButtonState = greenButtonState & read_gpio(greenPush);
-	interRedState = interRedState & read_gpio(redPush);
-	if (interRedState == 0x1){
-		redButtonState = 0b11;
-	}
-	yellowButtonState = yellowButtonState & read_gpio(yellowPush);
-	
+  button_1_state = button_1_state & read_gpio(pb1);
+  button_2_state = button_2_state & read_gpio(pb2);
+
   // return a bit mask representing which led we guessed 
-  // 
-  return ((orangeButtonState) | (greenButtonState << 1) | (redButtonState) | (yellowButtonState << 2));
-	
+  // (00000010 is led 2)
+  return ((button_2_state << 1) | (button_1_state));
 }
 
 void clear_leds()
 {
   // remember to clear all leds
-  write_gpio(orangeLed, LOW);
-  write_gpio(greenLed, LOW);
-	write_gpio(redLed, LOW);
-	write_gpio(yellowLed, LOW);
+  write_gpio(led1, LOW);
+  write_gpio(led2, LOW);
 }
