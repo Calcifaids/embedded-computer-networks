@@ -143,47 +143,40 @@
         <SetRegEntry>
           <Number>0</Number>
           <Key>ST-LINKIII-KEIL_SWO</Key>
-          <Name>-U0669FF525053885087043012 -O8399 -SF1800 -C0 -A0 -I0 -HNlocalhost -HP7184 -P2 -N00("ARM CoreSight SW-DP") -D00(5BA02477) -L00(0) -TO18 -TC10000000 -TP21 -TDS8004 -TDT0 -TDC1F -TIEFFFFFFFF -TIP8 -FO7 -FD20000000 -FC1000 -FN2 -FF0STM32F7x_1024.FLM -FS08000000 -FL0100000 -FP0($$Device:STM32F746NGHx$CMSIS\Flash\STM32F7x_1024.FLM) -FF1STM32F7x_TCM.FLM -FS1200000 -FL1100000 -FP1($$Device:STM32F746NGHx$CMSIS\Flash\STM32F7x_TCM.FLM)</Name>
+          <Name>-U066FFF535748775187133156 -O8399 -SF1800 -C0 -A0 -I0 -HNlocalhost -HP7184 -P2 -N00("ARM CoreSight SW-DP") -D00(5BA02477) -L00(0) -TO18 -TC10000000 -TP21 -TDS8004 -TDT0 -TDC1F -TIEFFFFFFFF -TIP8 -FO7 -FD20000000 -FC1000 -FN2 -FF0STM32F7x_1024.FLM -FS08000000 -FL0100000 -FP0($$Device:STM32F746NGHx$CMSIS\Flash\STM32F7x_1024.FLM) -FF1STM32F7x_TCM.FLM -FS1200000 -FL1100000 -FP1($$Device:STM32F746NGHx$CMSIS\Flash\STM32F7x_TCM.FLM)</Name>
         </SetRegEntry>
       </TargetDriverDllRegistry>
-      <Breakpoint>
-        <Bp>
-          <Number>0</Number>
-          <Type>0</Type>
-          <LineNumber>128</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>134224274</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
-          <Filename>..\src\main.c</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression>\\blinky\../src/main.c\128</Expression>
-        </Bp>
-      </Breakpoint>
+      <Breakpoint/>
       <WatchWindow1>
         <Ww>
           <count>0</count>
           <WinNumber>1</WinNumber>
-          <ItemText>random_num</ItemText>
+          <ItemText>current_led</ItemText>
         </Ww>
         <Ww>
           <count>1</count>
           <WinNumber>1</WinNumber>
-          <ItemText>current_led</ItemText>
+          <ItemText>guessed_led,0x10</ItemText>
         </Ww>
         <Ww>
           <count>2</count>
           <WinNumber>1</WinNumber>
-          <ItemText>guessed_led</ItemText>
+          <ItemText>orangeButtonState</ItemText>
         </Ww>
         <Ww>
           <count>3</count>
           <WinNumber>1</WinNumber>
-          <ItemText>random_num</ItemText>
+          <ItemText>greenButtonState</ItemText>
+        </Ww>
+        <Ww>
+          <count>4</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>redButtonState</ItemText>
+        </Ww>
+        <Ww>
+          <count>5</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>yellowButtonState</ItemText>
         </Ww>
       </WatchWindow1>
       <Tracepoint>
