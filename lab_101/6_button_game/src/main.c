@@ -40,7 +40,7 @@ gpio_pin_t restartButton = {PF_6, GPIOF, GPIO_PIN_6};
 // local game functions
 uint8_t get_led(void);
 uint8_t get_guess(void);
-uint8_t resetLives(long timeStamp, int j);
+uint8_t resetLives(int j);
 void loseFunc(void);
 void clear_leds(void);
 
@@ -85,7 +85,6 @@ int main()
   uint8_t   current_led = 0;
   uint8_t   guessed_led = 0;
   uint8_t		lives = 9;
-	unsigned long timeStamp = 0;
   // game loop ...
   
   // loop forever ...
@@ -120,16 +119,15 @@ int main()
 					loseFunc();
 					lives --;
 					printf("Lives left = %d\r\n",lives);
-					printf("To restart please press the restart button in the next 2 seconds!\r\n");
-					timeStamp = HAL_GetTick();
-					lives = resetLives(timeStamp, lives);
+					lives = resetLives(lives);
+					if (lives < 1){
+						printf("Game over!\r\n");
+						lives = 9;
+						printf("Lives = %d", lives);
+					}
 					current_led = get_led();
           current_time = HAL_GetTick();
         }
-				if (lives < 1){
-					printf("Game over!\r\n");
-					lives = 9;
-				}
       }
     }
 
@@ -140,6 +138,7 @@ int main()
 		if (lives < 1){
 			printf("Game over!\r\n");
 			lives = 9;
+			printf("Lives = %d", lives);
 		}
   }
 }
@@ -245,11 +244,17 @@ void loseFunc(){
 	HAL_Delay(200);
 }
 
-uint8_t resetLives(long i, int j){
+//Passed timestamp and lives
+uint8_t resetLives(int j){
 	//Could Do with timer
-	while(HAL_GetTick() > i + 2000){
-		if(read_gpio(restartButton) == HIGH){
+	uint8_t stateChanged = 0;
+	printf("To restart please press the restart button in the next 3 seconds!\r\n");
+	long timeStamp = HAL_GetTick() + 3000;
+	while(HAL_GetTick() < timeStamp){
+		if(read_gpio(restartButton) == HIGH && stateChanged == 0){
 			j = 9;
+			printf("Restarted!\r\n Lives = %d\r\n",j);
+			stateChanged = 1;
 		}
 	}
 	return j;	
