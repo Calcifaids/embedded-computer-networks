@@ -870,6 +870,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\libraries\bsp\stm32f7_discovery_shu_kit\src\gpio.c</FilePath>
             </File>
+            <File>
+              <FileName>adc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\libraries\bsp\stm32f7_discovery_shu_kit\src\adc.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>

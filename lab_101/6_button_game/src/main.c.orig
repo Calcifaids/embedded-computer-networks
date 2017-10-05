@@ -25,17 +25,28 @@
 // DECLARATIONS
 
 // leds
-gpio_pin_t led1 = {PB_8, GPIOB, GPIO_PIN_8};
-gpio_pin_t led2 = {PB_9, GPIOB, GPIO_PIN_9};
+gpio_pin_t orangeLed = {PI_1, GPIOI, GPIO_PIN_1};
+gpio_pin_t greenLed = {PB_14, GPIOB, GPIO_PIN_14};
+gpio_pin_t redLed = {PB_15, GPIOB, GPIO_PIN_15};
+gpio_pin_t yellowLed = {PA_8, GPIOA, GPIO_PIN_8};
 
 // buttons
-gpio_pin_t pb1 = {PC_6, GPIOC, GPIO_PIN_6};
-gpio_pin_t pb2 = {PC_7, GPIOC, GPIO_PIN_7};
+gpio_pin_t orangePush = {PG_7, GPIOG, GPIO_PIN_7};
+gpio_pin_t greenPush = {PI_0, GPIOI, GPIO_PIN_0};
+gpio_pin_t redPush = {PH_6, GPIOH, GPIO_PIN_6};
+gpio_pin_t yellowPush = {PI_3, GPIOI, GPIO_PIN_3};
+gpio_pin_t restartButton = {PF_6, GPIOF, GPIO_PIN_6};
+
+//Potentiometer
+gpio
 
 // local game functions
 uint8_t get_led(void);
 uint8_t get_guess(void);
+uint8_t resetLives(int j);
+void loseFunc(void);
 void clear_leds(void);
+
 
 // CODE
 
@@ -48,15 +59,22 @@ int main()
   init_sysclk_216MHz();
   
   // initialise the uart and random number generator
-  init_uart(115200);
+  init_uart(9600);
   init_random();
   
   // set up the gpio
-  init_gpio(led1, 0);
-  init_gpio(led2, 0);
-  init_gpio(pb1, 1);
-  init_gpio(pb2, 1);
-  
+	/*Output LED's*/
+  init_gpio(orangeLed, 0);
+  init_gpio(greenLed, 0);
+	init_gpio(redLed, 0);
+  init_gpio(yellowLed, 0);
+	/*Input Buttons*/
+  init_gpio(orangePush, 1);
+  init_gpio(greenPush, 1);
+	init_gpio(redPush, 1);
+  init_gpio(yellowPush, 1);
+  init_gpio(restartButton, 1);
+	
   // print an initial status message
   printf("we are alive!\r\n");
   
@@ -69,7 +87,7 @@ int main()
   uint32_t  timeout = 3000;
   uint8_t   current_led = 0;
   uint8_t   guessed_led = 0;
-  
+  uint8_t		lives = 9;
   // game loop ...
   
   // loop forever ...
@@ -100,7 +118,17 @@ int main()
         {
           // reset the timer and get a new led
           printf("sorry - you lose!\r\n");
-          current_led = get_led();
+					//Flash sequence
+					loseFunc();
+					lives --;
+					printf("Lives left = %d\r\n",lives);
+					lives = resetLives(lives);
+					if (lives < 1){
+						printf("Game over!\r\n");
+						lives = 9;
+						printf("Lives = %d", lives);
+					}
+					current_led = get_led();
           current_time = HAL_GetTick();
         }
       }
@@ -108,6 +136,13 @@ int main()
 
     // we ran out of time
     printf("you ran out of time :(\r\n");
+		lives --;
+		printf("Lives left = %d\r\n",lives);
+		if (lives < 1){
+			printf("Game over!\r\n");
+			lives = 9;
+			printf("Lives = %d", lives);
+		}
   }
 }
 
@@ -126,18 +161,24 @@ uint8_t get_led()
 
   // get a random number
   random_num = get_random_int();
-  printf("Random number = %d\r\n", (random_num % 4));
+  printf("Random number = %d\r\n", (random_num % 4) + 1);
 
   // use the random number to calculate which led to switch on
-  current_led = (random_num % 2) + 1;
-  if(current_led == 1)
-  {
-    write_gpio(led1, HIGH);
-  }
-  if(current_led == 2)
-  {
-    write_gpio(led2, LOW);
-  }
+  current_led = (random_num % 4) + 1;
+	switch(current_led){
+		case 1:
+			write_gpio(orangeLed, HIGH);
+		break;
+		case 2:
+			write_gpio(greenLed, HIGH);
+		break;
+		case 3:
+			write_gpio(redLed, HIGH);
+		break;
+		case 4:
+			write_gpio(yellowLed, HIGH);
+		break;
+	}
 
   // return the chosen led
   return current_led;
@@ -147,28 +188,77 @@ uint8_t get_led()
 uint8_t get_guess()
 {
   // initialise variables for the button states
-  uint8_t button_1_state = 0;
-  uint8_t button_2_state = 0;
+  uint8_t orangeButtonState = 0;
+  uint8_t greenButtonState = 0;
+	uint8_t interRedState = 0;
+	uint8_t redButtonState = 0;
+  uint8_t yellowButtonState = 0;
 
   // read the buttons
-  button_1_state = read_gpio(pb1);
-  button_2_state = read_gpio(pb2);
+  orangeButtonState = read_gpio(orangePush);
+  greenButtonState = read_gpio(greenPush);
+	interRedState = read_gpio(redPush);
+	yellowButtonState = read_gpio(yellowPush);
   
   // wait for a short period of time
-  HAL_Delay(25);
+  HAL_Delay(30);
   
   // read the buttons again
-  button_1_state = button_1_state & read_gpio(pb1);
-  button_2_state = button_2_state & read_gpio(pb2);
-
+  orangeButtonState = orangeButtonState & read_gpio(orangePush);
+  greenButtonState = greenButtonState & read_gpio(greenPush);
+	interRedState = interRedState & read_gpio(redPush);
+	if (interRedState == 0x1){
+		redButtonState = 0x3;
+	}
+	yellowButtonState = yellowButtonState & read_gpio(yellowPush);
+	
   // return a bit mask representing which led we guessed 
-  // (00000010 is led 2)
-  return ((button_2_state << 1) | (button_1_state));
+  // 
+  return ((orangeButtonState) | (greenButtonState << 1) | (redButtonState) | (yellowButtonState << 2));
+	
 }
 
 void clear_leds()
 {
   // remember to clear all leds
-  write_gpio(led1, LOW);
-  write_gpio(led2, LOW);
+  write_gpio(orangeLed, LOW);
+  write_gpio(greenLed, LOW);
+	write_gpio(redLed, LOW);
+	write_gpio(yellowLed, LOW);
+}
+
+void loseFunc(){
+	clear_leds();
+	write_gpio(orangeLed, HIGH);
+	HAL_Delay(200);
+	write_gpio(greenLed, HIGH);
+	HAL_Delay(200);
+	write_gpio(redLed, HIGH);
+	HAL_Delay(200);
+	write_gpio(yellowLed, HIGH);
+	HAL_Delay(200);
+	write_gpio(orangeLed, LOW);
+	HAL_Delay(200);
+	write_gpio(greenLed, LOW);
+	HAL_Delay(200);
+	write_gpio(redLed, LOW);
+	HAL_Delay(200);
+	write_gpio(yellowLed, LOW);
+	HAL_Delay(200);
+}
+
+//Passed timestamp and lives
+uint8_t resetLives(int j){
+	//Could Do with timer
+	uint8_t stateChanged = 0;
+	printf("To restart please press the restart button in the next 3 seconds!\r\n");
+	long timeStamp = HAL_GetTick() + 3000;
+	while(HAL_GetTick() < timeStamp){
+		if(read_gpio(restartButton) == HIGH && stateChanged == 0){
+			j = 9;
+			printf("Restarted!\r\n Lives = %d\r\n",j);
+			stateChanged = 1;
+		}
+	}
+	return j;	
 }

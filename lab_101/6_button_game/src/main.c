@@ -18,6 +18,7 @@
 #include "clock.h"
 #include "random_numbers.h"
 #include "gpio.h"
+#include "adc.h"
 
 // include the serial configuration files
 #include "serial.h"
@@ -37,10 +38,14 @@ gpio_pin_t redPush = {PH_6, GPIOH, GPIO_PIN_6};
 gpio_pin_t yellowPush = {PI_3, GPIOI, GPIO_PIN_3};
 gpio_pin_t restartButton = {PF_6, GPIOF, GPIO_PIN_6};
 
+//Potentiometer
+gpio_pin_t timerPot = {PA_0, GPIOA, GPIO_PIN_0};
+
 // local game functions
 uint8_t get_led(void);
 uint8_t get_guess(void);
 uint8_t resetLives(int j);
+uint8_t getPot(void);
 void loseFunc(void);
 void clear_leds(void);
 
@@ -58,7 +63,8 @@ int main()
   // initialise the uart and random number generator
   init_uart(9600);
   init_random();
-  
+	init_adc(timerPot);
+	
   // set up the gpio
 	/*Output LED's*/
   init_gpio(orangeLed, 0);
@@ -85,7 +91,12 @@ int main()
   uint8_t   current_led = 0;
   uint8_t   guessed_led = 0;
   uint8_t		lives = 9;
+	uint32_t	difficulty = 0;
   // game loop ...
+	
+	//Set initial timeout from Pot
+	timeout = read_adc(timerPot);
+	timeout = (timeout * 4000) / 1024 + 1000;
   
   // loop forever ...
   while(1)
@@ -93,11 +104,14 @@ int main()
     // set the current time and switch on an led
     current_time = HAL_GetTick();
     current_led = get_led();
-
+		
+	//	timeout = getPot();
     // while we've not run out of time ...
-    while(HAL_GetTick() < (current_time + timeout))
+    while(HAL_GetTick() < (current_time + timeout - difficulty))
     {
       // get the current guess
+			timeout = read_adc(timerPot);
+			timeout = (timeout * 4000) / 1024 + 1000;
       guessed_led = get_guess();
 
       // check if we have actually made a guess
@@ -108,6 +122,8 @@ int main()
         {
           // reset the timer and get a new led
           printf("excellent - you win!\r\n");
+					//decrease allowed time by 10ms
+					difficulty += 10;
           current_led = get_led();
           current_time = HAL_GetTick();
         }
@@ -122,6 +138,7 @@ int main()
 					lives = resetLives(lives);
 					if (lives < 1){
 						printf("Game over!\r\n");
+						difficulty = 0;
 						lives = 9;
 						printf("Lives = %d", lives);
 					}
@@ -138,6 +155,7 @@ int main()
 		if (lives < 1){
 			printf("Game over!\r\n");
 			lives = 9;
+			difficulty = 0;
 			printf("Lives = %d", lives);
 		}
   }
@@ -258,4 +276,10 @@ uint8_t resetLives(int j){
 		}
 	}
 	return j;	
+}
+
+uint8_t getPot(){
+	long time = read_adc(timerPot);
+	time = (time * 4000) / 1024 + 1000;
+	return time;
 }
