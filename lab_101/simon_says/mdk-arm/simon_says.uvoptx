@@ -151,32 +151,42 @@
         <Ww>
           <count>0</count>
           <WinNumber>1</WinNumber>
-          <ItemText>random_num</ItemText>
+          <ItemText>patternStore[0]</ItemText>
         </Ww>
         <Ww>
           <count>1</count>
           <WinNumber>1</WinNumber>
-          <ItemText>current_led</ItemText>
+          <ItemText>patternStore[1]</ItemText>
         </Ww>
         <Ww>
           <count>2</count>
           <WinNumber>1</WinNumber>
-          <ItemText>guessed_led</ItemText>
+          <ItemText>whichArray</ItemText>
         </Ww>
         <Ww>
           <count>3</count>
           <WinNumber>1</WinNumber>
-          <ItemText>random_num</ItemText>
+          <ItemText>currentReading</ItemText>
         </Ww>
         <Ww>
           <count>4</count>
           <WinNumber>1</WinNumber>
-          <ItemText>interRedState</ItemText>
+          <ItemText>current_led</ItemText>
         </Ww>
         <Ww>
           <count>5</count>
           <WinNumber>1</WinNumber>
-          <ItemText>timeout,0x0A</ItemText>
+          <ItemText>maxCurrentLevel,0x10</ItemText>
+        </Ww>
+        <Ww>
+          <count>6</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>currentItteration,0x0A</ItemText>
+        </Ww>
+        <Ww>
+          <count>7</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>initialShift,0x0A</ItemText>
         </Ww>
       </WatchWindow1>
       <Tracepoint>

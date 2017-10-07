@@ -42,12 +42,15 @@ gpio_pin_t restartButton = {PF_6, GPIOF, GPIO_PIN_6};
 gpio_pin_t timerPot = {PA_0, GPIOA, GPIO_PIN_0};
 
 // local game functions
+/*COME BACK AND REMOVE UNUSED FUNCTIONS*/
 uint8_t get_led(void);
 uint8_t get_guess(void);
 uint8_t resetLives(int j);
 uint8_t getPot(void);
 void loseFunc(void);
 void clear_leds(void);
+/*New functions*/
+
 
 
 // CODE
@@ -88,10 +91,18 @@ int main()
 
   // initialise some game variables
   uint32_t  timeout = 3000;
-  uint8_t   current_led = 0;
+  uint8_t   current_led = 0; //Reading variable
   uint8_t   guessed_led = 0;
-  uint8_t		lives = 9;
+	uint8_t 	gameOver = 0;
+	uint8_t		maxCurrentLevel = 1; 
+	uint8_t		currentItteration = 1;
+	uint8_t		initialShift = 0;
+  uint8_t		lives = 9; //PROBABLY REMOVE
 	uint32_t	difficulty = 0;
+
+	//Storage Array
+	unsigned long long patternStore[2] = {0};
+	unsigned long long currentReading;
   // game loop ...
 	
 	//Set initial timeout from Pot
@@ -101,65 +112,225 @@ int main()
   // loop forever ...
   while(1)
   {
-    // set the current time and switch on an led
-    current_time = HAL_GetTick();
-    current_led = get_led();
 		
-	//	timeout = getPot();
-    // while we've not run out of time ...
-    while(HAL_GetTick() < (current_time + timeout - difficulty))
-    {
-      // get the current guess
-			timeout = read_adc(timerPot);
-			timeout = (timeout * 4000) / 1024 + 1000;
-      guessed_led = get_guess();
+		while(gameOver == 0){
+			
+			/*START GENERATION OF NEW NUMBER AND STORE*/
+			uint32_t random_num = 0;
+			uint8_t  current_led = 0;
+			uint8_t 	whichArray = 0 ;
+			
+			//Generate random Number
+			random_num = get_random_int();
+			current_led = (random_num % 4) + 1;
+			
+			if (maxCurrentLevel > 21){
+				//Store to patternStore[1]
+				whichArray = 1;
+			}
+			else{
+				//Store to patternStore[0]
+				whichArray = 0;
+			}
+				
+			//Shift close (On loop 1 this will do nothing)
+			patternStore[whichArray] = patternStore[whichArray] >> 3;
+				
+			//Mask new LED to MSB side
+			switch (current_led){
+				case 1:
+					patternStore[whichArray] = patternStore[whichArray] | 0x1000000000000000;
+					break;
+				case 2:
+					patternStore[whichArray] = patternStore[whichArray] | 0x2000000000000000;
+					break;
+				case 3:
+					patternStore[whichArray] = patternStore[whichArray] | 0x3000000000000000;
+					break;
+				case 4:
+					patternStore[whichArray] = patternStore[whichArray] | 0x4000000000000000;
+					break;
+			}
+				
 
-      // check if we have actually made a guess
-      if(guessed_led != 0)
-      {
-        // were we correct?
-        if(guessed_led == current_led)
-        {
-          // reset the timer and get a new led
-          printf("excellent - you win!\r\n");
-					//decrease allowed time by 10ms
-					difficulty += 10;
-          current_led = get_led();
-          current_time = HAL_GetTick();
-        }
-        else
-        {
-          // reset the timer and get a new led
-          printf("sorry - you lose!\r\n");
-					//Flash sequence
-					loseFunc();
-					lives --;
-					printf("Lives left = %d\r\n",lives);
-					lives = resetLives(lives);
-					if (lives < 1){
-						printf("Game over!\r\n");
-						difficulty = 0;
-						lives = 9;
-						printf("Lives = %d", lives);
+			/*END GENERATION OF NEW NUMBER AND STORE*/	
+
+			/*START SEQUENCE READING AND DISPLAY*/
+			
+			/*Make this into function so can be used with the guess taking?*/
+			//Setup arrays to read
+			currentItteration = 1;
+			if (maxCurrentLevel > 21){
+					//setup [1]
+				initialShift = 63 - ((maxCurrentLevel - 21) * 3);
+				patternStore[1] = patternStore[1] >> initialShift;
+				//constant set of 21 for [0]so no shift needed
+			}
+			else{
+				//No shift required for [1] as not in use currently
+				initialShift = 63 - maxCurrentLevel * 3;
+				patternStore[0] = patternStore[0] >> initialShift; 
+			}
+			
+			
+			//Loop while bits still to cycle
+			while (currentItteration <= maxCurrentLevel){
+					if (currentItteration <= 21){
+						//Use and mask to determine the current segments flash value
+						currentReading = patternStore[0] & 0x7;
+						//Flash on LED HERE
+						switch(currentReading){
+							case 1:
+								write_gpio(orangeLed, HIGH);
+							break;
+							case 2:
+								write_gpio(greenLed, HIGH);
+							break;
+							case 3:
+								write_gpio(redLed, HIGH);
+							break;
+							case 4:
+								write_gpio(yellowLed, HIGH);
+							break;
+						}
+						//Push the pattern value off of the storage
+						patternStore[0] = patternStore[0] >> 3;
+						//loop the current reading the the MSB section of the storage with OR mask
+						patternStore[0] = patternStore[0] | (currentReading << 60);
+						currentReading = 0;
+						HAL_Delay(2000);
+						clear_leds();
+						HAL_Delay(500);
 					}
-					current_led = get_led();
-          current_time = HAL_GetTick();
-        }
-      }
-    }
+					else{
+						//Use and mask to determine the current segments flash value
+						currentReading = patternStore[0] & 0x7;
+						//Flash on LED HERE
+						switch(currentReading){
+							case 1:
+								write_gpio(orangeLed, HIGH);
+							break;
+							case 2:
+								write_gpio(greenLed, HIGH);
+							break;
+							case 3:
+								write_gpio(redLed, HIGH);
+							break;
+							case 4:
+								write_gpio(yellowLed, HIGH);
+							break;
+						}
+						//Push the pattern value off of the storage
+						patternStore[1] = patternStore[1] >> 3;
+						//loop the current reading the the MSB section of the storage with OR mask
+						patternStore[1] = patternStore[1] | (currentReading << 60);
+						currentReading = 0;
+						HAL_Delay(2000);
+						clear_leds();
+						HAL_Delay(500);
+					}
+				currentItteration ++;
+			}
+			write_gpio(orangeLed, HIGH);	
+			write_gpio(greenLed, HIGH);
+			write_gpio(redLed, HIGH);
+			write_gpio(yellowLed, HIGH);
+			HAL_Delay(100);
+			write_gpio(orangeLed, LOW);	
+			write_gpio(greenLed, LOW);
+			write_gpio(redLed, LOW);
+			write_gpio(yellowLed, LOW);
+			HAL_Delay(100);
+			write_gpio(orangeLed, HIGH);	
+			write_gpio(greenLed, HIGH);
+			write_gpio(redLed, HIGH);
+			write_gpio(yellowLed, HIGH);
+			HAL_Delay(100);
+			write_gpio(orangeLed, LOW);	
+			write_gpio(greenLed, LOW);
+			write_gpio(redLed, LOW);
+			write_gpio(yellowLed, LOW);
+			HAL_Delay(1000);
+				
+				
+			
+			
+			/*END SEQUENCE READING AND DISPLAY*/
+			
+			
+			/*START SEQUENCE READING AND GUESSING*/
+			
+			maxCurrentLevel ++;
+			//Reached maximum level (Could calculate dynamically using (no. of elements x 21) + 1, if letting the player choose and using malloc ?)
+			if (maxCurrentLevel == 43){
+				gameOver = 1;
+			}
+			/*END SEQUENCE READING AND GUESSING*/
 
-    // we ran out of time
-    printf("you ran out of time :(\r\n");
-		lives --;
-		printf("Lives left = %d\r\n",lives);
-		if (lives < 1){
-			printf("Game over!\r\n");
-			lives = 9;
-			difficulty = 0;
-			printf("Lives = %d", lives);
 		}
-  }
-}
+		
+	}		
+}		
+		
+		
+		
+		
+		
+//	//	timeout = getPot();
+//    // while we've not run out of time ...
+//    while(HAL_GetTick() < (current_time + timeout - difficulty))
+//    {
+//      // get the current guess
+//			timeout = read_adc(timerPot);
+//			timeout = (timeout * 4000) / 1024 + 1000;
+//      guessed_led = get_guess();
+
+//      // check if we have actually made a guess
+//      if(guessed_led != 0)
+//      {
+//        // were we correct?
+//        if(guessed_led == current_led)
+//        {
+//          // reset the timer and get a new led
+//          printf("excellent - you win!\r\n");
+//					//decrease allowed time by 10ms
+//					difficulty += 10;
+//          current_led = get_led();
+//          current_time = HAL_GetTick();
+//        }
+//        else
+//        {
+//          // reset the timer and get a new led
+//          printf("sorry - you lose!\r\n");
+//					//Flash sequence
+//					loseFunc();
+//					lives --;
+//					printf("Lives left = %d\r\n",lives);
+//					lives = resetLives(lives);
+//					if (lives < 1){
+//						printf("Game over!\r\n");
+//						difficulty = 0;
+//						lives = 9;
+//						printf("Lives = %d", lives);
+//					}
+//					current_led = get_led();
+//          current_time = HAL_GetTick();
+//        }
+//      }
+//    }
+
+//    // we ran out of time
+//    printf("you ran out of time :(\r\n");
+//		lives --;
+//		printf("Lives left = %d\r\n",lives);
+//		if (lives < 1){
+//			printf("Game over!\r\n");
+//			lives = 9;
+//			difficulty = 0;
+//			printf("Lives = %d", lives);
+//		}
+//  }
+//}
 
 // GAME FUNCTIONS
 
@@ -176,7 +347,6 @@ uint8_t get_led()
 
   // get a random number
   random_num = get_random_int();
-  printf("Random number = %d\r\n", (random_num % 4) + 1);
 
   // use the random number to calculate which led to switch on
   current_led = (random_num % 4) + 1;
