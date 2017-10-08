@@ -42,102 +42,77 @@ gpio_pin_t restartButton = {PF_6, GPIOF, GPIO_PIN_6};
 gpio_pin_t timerPot = {PA_0, GPIOA, GPIO_PIN_0};
 
 // local game functions
-/*COME BACK AND REMOVE UNUSED FUNCTIONS*/
-uint8_t get_led(void);
 uint8_t get_guess(void);
-uint8_t resetLives(int j);
-uint8_t getPot(void);
+uint8_t setArray(uint8_t maxCurrentLevel);
+void readAndShift(uint64_t patternStore[], uint64_t *currentReading, uint8_t currentItteration);
+void shiftToFirstValue(uint64_t patternStore[], uint8_t maxCurrentLevel);
 void loseFunc(void);
 void clear_leds(void);
+void endOfSequence(void);
 /*New functions*/
 
 
-
-// CODE
-
-// this is the main method
-int main()
-{
-  // we need to initialise the hal library and set up the SystemCoreClock 
-  // properly
-  HAL_Init();
-  init_sysclk_216MHz();
-  
-  // initialise the uart and random number generator
-  init_uart(9600);
-  init_random();
+int main(){
+	//Init Clock and HAL Lib
+	HAL_Init();
+	init_sysclk_216MHz();
+	//Init UART, RNG
+	init_uart(9600);
+	init_random();
+	
+	//Setup the GPIO
+	/*Output LED's*/
+	init_gpio(orangeLed, 0);
+	init_gpio(greenLed, 0);
+	init_gpio(redLed, 0);
+	init_gpio(yellowLed, 0);
+	/*Input Buttons*/
+	init_gpio(orangePush, 1);
+	init_gpio(greenPush, 1);
+	init_gpio(redPush, 1);
+	init_gpio(yellowPush, 1);
+	init_gpio(restartButton, 1);
+	/*Potentiometer*/
 	init_adc(timerPot);
 	
-  // set up the gpio
-	/*Output LED's*/
-  init_gpio(orangeLed, 0);
-  init_gpio(greenLed, 0);
-	init_gpio(redLed, 0);
-  init_gpio(yellowLed, 0);
-	/*Input Buttons*/
-  init_gpio(orangePush, 1);
-  init_gpio(greenPush, 1);
-	init_gpio(redPush, 1);
-  init_gpio(yellowPush, 1);
-  init_gpio(restartButton, 1);
-	
-  // print an initial status message
-  printf("we are alive!\r\n");
-  
-  // game variables ...
-  
-  // initialise time value
-  uint32_t current_time = 0;
-
-  // initialise some game variables
-  uint32_t  timeout = 3000;
-  uint8_t   current_led = 0; //Reading variable
-  uint8_t   guessed_led = 0;
-	uint8_t 	gameOver = 0;
-	uint8_t		maxCurrentLevel = 1; 
+	//Variables
+	/*Time*/
+	uint32_t 	current_time = 0;
+	uint32_t 	timeout;
+	/*Storage*/
+	uint64_t 	patternStore[2] = {0};
+	uint64_t 	currentReading;
+	uint8_t		guessed_led = 0;
+	uint8_t   storeLed = 0;
+	/*Game*/
+	uint8_t		gameOver = 0;
 	uint8_t		currentItteration = 1;
-	uint8_t		initialShift = 0;
-  uint8_t		lives = 9; //PROBABLY REMOVE
-	uint32_t	difficulty = 0;
-
-	//Storage Array
-	unsigned long long patternStore[2] = {0};
-	unsigned long long currentReading;
-  // game loop ...
+	uint8_t		maxCurrentLevel = 1;
+	uint8_t		firstPass = 0;
 	
-	//Set initial timeout from Pot
-	timeout = read_adc(timerPot);
-	timeout = (timeout * 4000) / 1024 + 1000;
-  
-  // loop forever ...
-  while(1)
-  {
-		
+	//Begin main loop
+	while(1){
 		while(gameOver == 0){
 			
 			/*START GENERATION OF NEW NUMBER AND STORE*/
-			uint32_t random_num = 0;
-			uint8_t  current_led = 0;
-			uint8_t 	whichArray = 0 ;
 			
-			//Generate random Number
+			//Set/Reset arrays for beggining of game
+			uint32_t 	random_num = 0;
+			uint8_t 	storeLed = 0;
+			uint8_t 	whichArray = 0;
+			
+			//Generate Random number
 			random_num = get_random_int();
-			current_led = (random_num % 4) + 1;
+			storeLed = (random_num % 4) + 1;
 			
-			if (maxCurrentLevel > 21){
-				//Store to patternStore[1]
-				whichArray = 1;
-			}
-			else{
-				//Store to patternStore[0]
-				whichArray = 0;
-			}
-				
-			//Shift close (On loop 1 this will do nothing)
+			//Preset value to write array
+			whichArray = setArray(maxCurrentLevel);
+			
+			//Shift to prevent value overwrite
 			patternStore[whichArray] = patternStore[whichArray] >> 3;
-				
+			
 			//Mask new LED to MSB side
-			switch (current_led){
+			switch (storeLed){
 				case 1:
 					patternStore[whichArray] = patternStore[whichArray] | 0x1000000000000000;
 					break;
@@ -151,35 +126,20 @@ int main()
 					patternStore[whichArray] = patternStore[whichArray] | 0x4000000000000000;
 					break;
 			}
-				
-
-			/*END GENERATION OF NEW NUMBER AND STORE*/	
-
+			
+			/*END GENERATION OF NEW NUMBER AND STORE*/
+			
 			/*START SEQUENCE READING AND DISPLAY*/
 			
-			/*Make this into function so can be used with the guess taking?*/
-			//Setup arrays to read
+			//Reset looping variable
 			currentItteration = 1;
-			if (maxCurrentLevel > 21){
-					//setup [1]
-				initialShift = 63 - ((maxCurrentLevel - 21) * 3);
-				patternStore[1] = patternStore[1] >> initialShift;
-				//constant set of 21 for [0]so no shift needed
-			}
-			else{
-				//No shift required for [1] as not in use currently
-				initialShift = 63 - maxCurrentLevel * 3;
-				patternStore[0] = patternStore[0] >> initialShift; 
-			}
-			
+			shiftToFirstValue(patternStore, maxCurrentLevel);
 			
 			//Loop while bits still to cycle
 			while (currentItteration <= maxCurrentLevel){
-					if (currentItteration <= 21){
-						//Use and mask to determine the current segments flash value
-						currentReading = patternStore[0] & 0x7;
-						//Flash on LED HERE
-						switch(currentReading){
+				readAndShift(patternStore, &currentReading, currentItteration);
+				//flash LED
+				switch(currentReading){
 							case 1:
 								write_gpio(orangeLed, HIGH);
 							break;
@@ -192,188 +152,87 @@ int main()
 							case 4:
 								write_gpio(yellowLed, HIGH);
 							break;
-						}
-						//Push the pattern value off of the storage
-						patternStore[0] = patternStore[0] >> 3;
-						//loop the current reading the the MSB section of the storage with OR mask
-						patternStore[0] = patternStore[0] | (currentReading << 60);
-						currentReading = 0;
-						HAL_Delay(2000);
-						clear_leds();
-						HAL_Delay(500);
-					}
-					else{
-						//Use and mask to determine the current segments flash value
-						currentReading = patternStore[0] & 0x7;
-						//Flash on LED HERE
-						switch(currentReading){
-							case 1:
-								write_gpio(orangeLed, HIGH);
-							break;
-							case 2:
-								write_gpio(greenLed, HIGH);
-							break;
-							case 3:
-								write_gpio(redLed, HIGH);
-							break;
-							case 4:
-								write_gpio(yellowLed, HIGH);
-							break;
-						}
-						//Push the pattern value off of the storage
-						patternStore[1] = patternStore[1] >> 3;
-						//loop the current reading the the MSB section of the storage with OR mask
-						patternStore[1] = patternStore[1] | (currentReading << 60);
-						currentReading = 0;
-						HAL_Delay(2000);
-						clear_leds();
-						HAL_Delay(500);
-					}
+				}
+				//Reset reading , clear, and increment for next reading
+				currentReading = 0;
+				HAL_Delay(2000);
+				clear_leds();
+				HAL_Delay(500);
 				currentItteration ++;
 			}
-			write_gpio(orangeLed, HIGH);	
-			write_gpio(greenLed, HIGH);
-			write_gpio(redLed, HIGH);
-			write_gpio(yellowLed, HIGH);
-			HAL_Delay(100);
-			write_gpio(orangeLed, LOW);	
-			write_gpio(greenLed, LOW);
-			write_gpio(redLed, LOW);
-			write_gpio(yellowLed, LOW);
-			HAL_Delay(100);
-			write_gpio(orangeLed, HIGH);	
-			write_gpio(greenLed, HIGH);
-			write_gpio(redLed, HIGH);
-			write_gpio(yellowLed, HIGH);
-			HAL_Delay(100);
-			write_gpio(orangeLed, LOW);	
-			write_gpio(greenLed, LOW);
-			write_gpio(redLed, LOW);
-			write_gpio(yellowLed, LOW);
-			HAL_Delay(1000);
-				
-				
-			
+			//Flash LEDS to signify end of current level displaying
+			endOfSequence();
 			
 			/*END SEQUENCE READING AND DISPLAY*/
 			
-			
 			/*START SEQUENCE READING AND GUESSING*/
+			//Beginning Setup
+			currentItteration = 1;
+			shiftToFirstValue(patternStore, maxCurrentLevel);
 			
+			//Make sure we haven't reached gameover or exceeded current Level
+			while (gameOver == 0 && (currentItteration <= maxCurrentLevel)){
+				//Get this loops value
+				whichArray = setArray(maxCurrentLevel);
+				readAndShift(patternStore, &currentReading, currentItteration);
+				
+				//preset Timeout & set current time 
+				timeout = read_adc(timerPot);
+				timeout = (timeout * 4000) / 1024 + 1000;
+				current_time = HAL_GetTick();
+				//reset variables
+				storeLed = 0;
+				firstPass = 0;
+				guessed_led = 0;
+				//Check a guess hasn't occured and we haven't timed over
+				while((HAL_GetTick() < (current_time + timeout)) && (firstPass != 2)){
+					//Allow timeout change during guess taking
+					timeout = read_adc(timerPot);
+					timeout = (timeout * 4000) / 1024 + 1000;
+					//Need to fix button debounce for this!
+					guessed_led = get_guess();
+					if (guessed_led != 0 && firstPass == 0){
+						//Led has been pressed for the first time
+						firstPass = 1;
+						storeLed = guessed_led;
+						if(storeLed != currentReading){
+							printf("Game Over!");
+							gameOver = 1;
+						}
+					}
+					else if (guessed_led == 0 && firstPass == 1){
+						//Led has been released
+						firstPass = 2;
+					}
+				}
+				//Check for timeout
+				if (HAL_GetTick() > (current_time + timeout) && storeLed == 0){
+					gameOver = 1;
+				}
+				currentItteration ++;
+			}
+
+			//Increment Level
 			maxCurrentLevel ++;
 			//Reached maximum level (Could calculate dynamically using (no. of elements x 21) + 1, if letting the player choose and using malloc ?)
 			if (maxCurrentLevel == 43){
 				gameOver = 1;
 			}
 			/*END SEQUENCE READING AND GUESSING*/
-
+			
 		}
-		
-	}		
-}		
-		
-		
-		
-		
-		
-//	//	timeout = getPot();
-//    // while we've not run out of time ...
-//    while(HAL_GetTick() < (current_time + timeout - difficulty))
-//    {
-//      // get the current guess
-//			timeout = read_adc(timerPot);
-//			timeout = (timeout * 4000) / 1024 + 1000;
-//      guessed_led = get_guess();
-
-//      // check if we have actually made a guess
-//      if(guessed_led != 0)
-//      {
-//        // were we correct?
-//        if(guessed_led == current_led)
-//        {
-//          // reset the timer and get a new led
-//          printf("excellent - you win!\r\n");
-//					//decrease allowed time by 10ms
-//					difficulty += 10;
-//          current_led = get_led();
-//          current_time = HAL_GetTick();
-//        }
-//        else
-//        {
-//          // reset the timer and get a new led
-//          printf("sorry - you lose!\r\n");
-//					//Flash sequence
-//					loseFunc();
-//					lives --;
-//					printf("Lives left = %d\r\n",lives);
-//					lives = resetLives(lives);
-//					if (lives < 1){
-//						printf("Game over!\r\n");
-//						difficulty = 0;
-//						lives = 9;
-//						printf("Lives = %d", lives);
-//					}
-//					current_led = get_led();
-//          current_time = HAL_GetTick();
-//        }
-//      }
-//    }
-
-//    // we ran out of time
-//    printf("you ran out of time :(\r\n");
-//		lives --;
-//		printf("Lives left = %d\r\n",lives);
-//		if (lives < 1){
-//			printf("Game over!\r\n");
-//			lives = 9;
-//			difficulty = 0;
-//			printf("Lives = %d", lives);
-//		}
-//  }
-//}
-
-// GAME FUNCTIONS
-
-// get a new led
-uint8_t get_led()
-{
-  // declare a random number variable and a current led variable
-  uint32_t random_num = 0;
-  uint8_t  current_led = 0;
-
-  // make sure all leds are off
-  clear_leds();
-  HAL_Delay(500);
-
-  // get a random number
-  random_num = get_random_int();
-
-  // use the random number to calculate which led to switch on
-  current_led = (random_num % 4) + 1;
-	switch(current_led){
-		case 1:
-			write_gpio(orangeLed, HIGH);
-		break;
-		case 2:
-			write_gpio(greenLed, HIGH);
-		break;
-		case 3:
-			write_gpio(redLed, HIGH);
-		break;
-		case 4:
-			write_gpio(yellowLed, HIGH);
-		break;
+		//Gameover, so reset variables to restart
+		loseFunc();
+		maxCurrentLevel = 1;
+		//change to loop to scale?
+		patternStore[0] = 0; 
+		patternStore[1] = 0;
+		gameOver = 0;
 	}
-
-  // return the chosen led
-  return current_led;
 }
 
-// get led guess
-uint8_t get_guess()
-{
-  // initialise variables for the button states
-  uint8_t orangeButtonState = 0;
+uint8_t get_guess(){
+	uint8_t orangeButtonState = 0;
   uint8_t greenButtonState = 0;
 	uint8_t interRedState = 0;
 	uint8_t redButtonState = 0;
@@ -386,7 +245,7 @@ uint8_t get_guess()
 	yellowButtonState = read_gpio(yellowPush);
   
   // wait for a short period of time
-  HAL_Delay(30);
+  HAL_Delay(50);
   
   // read the buttons again
   orangeButtonState = orangeButtonState & read_gpio(orangePush);
@@ -403,10 +262,8 @@ uint8_t get_guess()
 	
 }
 
-void clear_leds()
-{
-  // remember to clear all leds
-  write_gpio(orangeLed, LOW);
+void clear_leds(){
+	write_gpio(orangeLed, LOW);
   write_gpio(greenLed, LOW);
 	write_gpio(redLed, LOW);
 	write_gpio(yellowLed, LOW);
@@ -432,24 +289,71 @@ void loseFunc(){
 	HAL_Delay(200);
 }
 
-//Passed timestamp and lives
-uint8_t resetLives(int j){
-	//Could Do with timer
-	uint8_t stateChanged = 0;
-	printf("To restart please press the restart button in the next 3 seconds!\r\n");
-	long timeStamp = HAL_GetTick() + 3000;
-	while(HAL_GetTick() < timeStamp){
-		if(read_gpio(restartButton) == HIGH && stateChanged == 0){
-			j = 9;
-			printf("Restarted!\r\n Lives = %d\r\n",j);
-			stateChanged = 1;
-		}
-	}
-	return j;	
+uint8_t setArray(uint8_t maxCurrentLevel){
+	uint8_t x;
+	if (maxCurrentLevel > 21){
+				//Store to patternStore[1]
+				x = 1;
+			}
+			else{
+				//Store to patternStore[0]
+				x = 0;
+			}
+	return x;
 }
 
-uint8_t getPot(){
-	long time = read_adc(timerPot);
-	time = (time * 4000) / 1024 + 1000;
-	return time;
+void shiftToFirstValue(uint64_t patternStore[], uint8_t maxCurrentLevel){
+	if (maxCurrentLevel > 21){
+					//setup [1]
+				int initialShift = 63 - ((maxCurrentLevel - 21) * 3);
+				patternStore[1] = patternStore[1] >> initialShift;
+				//constant set of 21 for [0]so no shift needed
+			}
+			else{
+				//No shift required for [1] as not in use currently
+				int initialShift = 63 - maxCurrentLevel * 3;
+				patternStore[0] = patternStore[0] >> initialShift; 
+			}
+}
+
+void readAndShift(uint64_t patternStore[], uint64_t *currentReading, uint8_t currentItteration){
+	if (currentItteration <= 21){
+		//Use and mask to determine the current segments flash value
+		*currentReading = patternStore[0] & 0x7;
+		//Push the pattern value off of the storage
+		patternStore[0] = patternStore[0] >> 3;
+		//loop the current reading the the MSB section of the storage with OR mask
+		patternStore[0] = patternStore[0] | (*currentReading << 60);
+	}
+	else{
+		//Use and mask to determine the current segments flash value
+		*currentReading = patternStore[1] & 0x7;
+		//Push the pattern value off of the storage
+		patternStore[1] = patternStore[1] >> 3;
+		//loop the current reading the the MSB section of the storage with OR mask
+		patternStore[1] = patternStore[1] | (*currentReading << 60);
+	}
+}
+
+void endOfSequence(){
+	write_gpio(orangeLed, HIGH);	
+	write_gpio(greenLed, HIGH);
+	write_gpio(redLed, HIGH);
+	write_gpio(yellowLed, HIGH);
+	HAL_Delay(100);
+	write_gpio(orangeLed, LOW);	
+	write_gpio(greenLed, LOW);
+	write_gpio(redLed, LOW);
+	write_gpio(yellowLed, LOW);
+	HAL_Delay(100);
+	write_gpio(orangeLed, HIGH);	
+	write_gpio(greenLed, HIGH);
+	write_gpio(redLed, HIGH);
+	write_gpio(yellowLed, HIGH);
+	HAL_Delay(100);
+	write_gpio(orangeLed, LOW);	
+	write_gpio(greenLed, LOW);
+	write_gpio(redLed, LOW);
+	write_gpio(yellowLed, LOW);
+	HAL_Delay(1000);
 }
