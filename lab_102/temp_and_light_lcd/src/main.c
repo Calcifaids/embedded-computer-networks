@@ -40,7 +40,8 @@ gpio_pin_t temp = {PA_0, GPIOA, GPIO_PIN_0};
 // CODE
 
 char led[20];
-	
+uint16_t tempVal;
+uint8_t tempAvr;
 // this is the main method
 int main(){
   // we need to initialise the hal library and set up the SystemCoreClock 
@@ -88,23 +89,22 @@ int main(){
 	while(1){	
 		char str[12];
 		
-		sprintf(str, "minval = %d", minLdr);
+		//Read temp
+		tempVal = read_adc(temp);
+		float voltage = (tempVal * 5000) / 4095;
+		tempVal = (voltage - 500) / 10;
+		sprintf(str, "temp = %dc", tempVal);
+		BSP_LCD_ClearStringLine(5);
+		BSP_LCD_DisplayStringAtLine(5, (uint8_t *)str);
+		
+		//Read LDR
+		ldrReading = read_adc(ldr);
+		//if a scale not starting at 0, then add value to final part of equation
+		ldrReading = (ldrReading - minLdr) * (100 - 0) / (maxLdr - minLdr);
+		sprintf(str, "Luminosity = %d%%", ldrReading);
 		BSP_LCD_ClearStringLine(6);
 		BSP_LCD_DisplayStringAtLine(6, (uint8_t *)str);
 		
-		
-		
-		
-		//Read temp
-		uint16_t tempVal = read_adc(temp);
-		tempVal = (tempVal * 5.0) / 4095;
-		tempVal = (tempVal - 0.5) * 100;
-		sprintf(str, "temp = %d°c", maxLdr);
-		BSP_LCD_ClearStringLine(5);
-		BSP_LCD_DisplayStringAtLine(5, (uint8_t *)str);
-		ldrReading = read_adc(ldr);
-		
-
-		
+		HAL_Delay(50);
   }
 }
