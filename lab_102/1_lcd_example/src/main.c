@@ -70,19 +70,22 @@ int main()
   
   // set the font to use
   BSP_LCD_SetFont(&Font24); 
-  
-  // print the welcome message ...
-  BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
-  BSP_LCD_DisplayStringAtLine(0, (uint8_t *)BOARDER);
-  BSP_LCD_DisplayStringAtLine(1, (uint8_t *)welcome_message[0]);
-  BSP_LCD_DisplayStringAtLine(2, (uint8_t *)welcome_message[1]);
-  BSP_LCD_DisplayStringAtLine(3, (uint8_t *)BOARDER); 
+	
+	BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+
     
   // delay a little ...
   HAL_Delay(2000);
   
   while(1)
   {
+		
+		// print the welcome message ...
+		BSP_LCD_Clear(LCD_COLOR_BROWN);
+		BSP_LCD_DisplayStringAtLine(0, (uint8_t *)BOARDER);
+		BSP_LCD_DisplayStringAtLine(1, (uint8_t *)welcome_message[0]);
+		BSP_LCD_DisplayStringAtLine(2, (uint8_t *)welcome_message[1]);
+		BSP_LCD_DisplayStringAtLine(3, (uint8_t *)BOARDER); 
 		//Get ADC and convert (Fix this with calibratoin).
 		uint16_t adc_val = read_adc(pot);
 		adc_val = (adc_val * 100) / 4095.0;
@@ -121,13 +124,11 @@ int main()
     BSP_LCD_DisplayStringAtLine(5, (uint8_t *)str);
     BSP_LCD_ClearStringLine(6);
 		BSP_LCD_DisplayStringAtLine(6, (uint8_t *)led);
-		char barBuffer[27] = {0};
-		adc_val = (adc_val * 29) / 100.0;
-		for (int i = 0; i < adc_val; i ++){
-			barBuffer[i] = '#';
-		}
-		BSP_LCD_ClearStringLine(7);
-		BSP_LCD_DisplayStringAtLine(7, (uint8_t *)barBuffer);
+		
+		//set pixel scope
+		adc_val = (adc_val * 480) / 100;
+		BSP_LCD_DrawRect(0, 180, 480, 20);
+		BSP_LCD_FillRect(0, 180, adc_val, 20);
     HAL_Delay(1000);
   }
 }
