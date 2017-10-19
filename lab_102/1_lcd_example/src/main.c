@@ -81,7 +81,7 @@ int main()
   {
 		
 		// print the welcome message ...
-		BSP_LCD_Clear(LCD_COLOR_BROWN);
+		//BSP_LCD_Clear(LCD_COLOR_BROWN);
 		BSP_LCD_DisplayStringAtLine(0, (uint8_t *)BOARDER);
 		BSP_LCD_DisplayStringAtLine(1, (uint8_t *)welcome_message[0]);
 		BSP_LCD_DisplayStringAtLine(2, (uint8_t *)welcome_message[1]);
@@ -127,9 +127,15 @@ int main()
 		
 		//set pixel scope
 		adc_val = (adc_val * 480) / 100;
-		BSP_LCD_DrawRect(0, 180, 480, 20);
+		
+		BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+		BSP_LCD_FillRect(0, 180, 480, 20);
+		
+		BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
 		BSP_LCD_FillRect(0, 180, adc_val, 20);
-    HAL_Delay(1000);
+    
+		
+		HAL_Delay(1000);
   }
 }
 
