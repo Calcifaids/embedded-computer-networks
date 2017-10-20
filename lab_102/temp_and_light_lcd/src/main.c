@@ -41,7 +41,7 @@ gpio_pin_t temp = {PA_0, GPIOA, GPIO_PIN_0};
 
 char led[20];
 uint16_t tempVal;
-uint8_t tempAvr;
+uint16_t tempAvr[8] = {0};
 // this is the main method
 int main(){
   // we need to initialise the hal library and set up the SystemCoreClock 
@@ -86,25 +86,54 @@ int main(){
 		}
 	
 	}
+	uint16_t tempTime = HAL_GetTick();
+	uint16_t printTime = HAL_GetTick();
+	uint8_t x = 0;
 	while(1){	
 		char str[12];
 		
-		//Read temp
-		tempVal = read_adc(temp);
-		float voltage = (tempVal * 5000) / 4095;
-		tempVal = (voltage - 500) / 10;
-		sprintf(str, "temp = %dc", tempVal);
-		BSP_LCD_ClearStringLine(5);
-		BSP_LCD_DisplayStringAtLine(5, (uint8_t *)str);
+		//Sample 8 times / sec
+		if (HAL_GetTick() > tempTime + 125){
+			//Store temp to an array for averaging
+			tempAvr[x] = read_adc(temp);
+			float voltage = (tempAvr[x] * 5000) / 4095;
+			tempAvr[x] = (voltage - 500) / 10;
+			//Reset Timestamp
+			tempTime = HAL_GetTick();
+			x++;
+			if (x == 8){
+				for (x = 0; x < 8; x++){
+					tempVal += tempAvr[x];
+				}
+				tempVal /= 8;
+				x = 0;
+			}
+		}
 		
-		//Read LDR
+		//Read LDR & recalibrate
 		ldrReading = read_adc(ldr);
+		
+		if (ldrReading > maxLdr){
+			maxLdr = ldrReading;
+		}
+		if (ldrReading < minLdr){
+			minLdr = ldrReading;
+		}
+		
 		//if a scale not starting at 0, then add value to final part of equation
 		ldrReading = (ldrReading - minLdr) * (100 - 0) / (maxLdr - minLdr);
-		sprintf(str, "Luminosity = %d%%", ldrReading);
-		BSP_LCD_ClearStringLine(6);
-		BSP_LCD_DisplayStringAtLine(6, (uint8_t *)str);
 		
-		HAL_Delay(50);
+		//Should print 60fps? Board may not be able to keep up
+		if (HAL_GetTick() > printTime + 10){
+			sprintf(str, "temp = %dc", tempVal);
+			BSP_LCD_ClearStringLine(5);
+			BSP_LCD_DisplayStringAtLine(5, (uint8_t *)str);
+			
+			sprintf(str, "Luminosity = %d%%", ldrReading);
+			BSP_LCD_ClearStringLine(6);
+			BSP_LCD_DisplayStringAtLine(6, (uint8_t *)str);
+				
+			printTime = HAL_GetTick();
+		}
   }
 }
