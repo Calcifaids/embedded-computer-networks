@@ -110,7 +110,7 @@ int main(){
 			}
 		}
 		
-		//Read LDR & recalibrate
+		//Tie recalibration to button press?
 		ldrReading = read_adc(ldr);
 		
 		if (ldrReading > maxLdr){
