@@ -3,9 +3,9 @@
  *
  * header file for the interrupt handler routines
  *
- * author:    Dr. Alex Shenfield
- * date:      07/09/2017
- * purpose:   55-604481 embedded computer networks : lab 103
+ * author:    Alex Shenfield
+ * date:      20/09/2015
+ * purpose:   16-6498 embedded computer networks : lab 101
  */
 
 // define to prevent recursive inclusion

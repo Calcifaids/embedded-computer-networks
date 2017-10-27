@@ -231,7 +231,7 @@ void DebugMon_Handler(void)
 //void PendSV_Handler(void)
 //{
 //}
-//
+
 ///**
 //  * @brief  This function handles SysTick Handler.
 //  * @param  None
@@ -247,3 +247,8 @@ void DebugMon_Handler(void)
 //  HAL_SYSTICK_IRQHandler();
 //  
 //}
+
+/*****************************************************************************/
+/*                 STM32F7xx Peripherals Interrupt Handlers                  */
+/*****************************************************************************/
+
