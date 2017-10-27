@@ -25,8 +25,11 @@
 
 // declare the thread function prototypes, thread id, and priority
 void data_thread(void const *argument);
+void led_thread(void const *argument);
 osThreadId tid_data_thread;
+osThreadId tid_led_thread;
 osThreadDef(data_thread, osPriorityNormal, 1, 0);
+osThreadDef(led_thread, osPriorityNormal, 2, 0);
 
 // set up the mail queue
 osMailQDef(mail_box, 16, mail_t);
@@ -36,7 +39,15 @@ osMailQId  mail_box;
 
 // led is on PI 1 (this is the inbuilt led)
 gpio_pin_t led1 = {PI_1, GPIOI, GPIO_PIN_1};
+gpio_pin_t led2 = {PF_6, GPIOF, GPIO_PIN_6};
+gpio_pin_t led3 = {PF_7, GPIOF, GPIO_PIN_7};
+gpio_pin_t led4 = {PF_8, GPIOF, GPIO_PIN_8};
 
+/*
+gpio_pin_t led2 = {PF_6, GPIOF, GPIO_PIN_6};
+gpio_pin_t led3 = {PF_7, GPIOF, GPIO_PIN_7};
+gpio_pin_t led4 = {PF_8, GPIOF, GPIO_PIN_8};
+*/
 // THREAD INITIALISATION
 
 // create the data generation thread
@@ -44,14 +55,20 @@ int init_data_thread(void)
 {
   // initialize peripherals (i.e. the led and random number generator) here
   init_gpio(led1, OUTPUT);
-  init_random();
+	init_gpio(led2, OUTPUT);
+  init_gpio(led3, OUTPUT);
+	init_gpio(led4, OUTPUT);
+	
+	init_random();
   
   // create the mailbox
   mail_box = osMailCreate(osMailQ(mail_box), NULL);
   
   // create the thread and get its task id
   tid_data_thread = osThreadCreate(osThread(data_thread), NULL);
-  
+	
+  tid_led_thread = osThreadCreate(osThread(led_thread), NULL);
+	
   // check if everything worked ...
   if(!tid_data_thread)
   {
@@ -93,3 +110,30 @@ void data_thread(void const *argument)
     osDelay(1000);
   }
 } 
+
+void led_thread(void const *argument){
+	uint16_t i = 0;
+	mail_t* ledMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
+	
+	while (1){
+		
+		//Clear leds
+		write_gpio(led2, LOW);
+		write_gpio(led3, LOW);
+		write_gpio(led4, LOW);
+		
+		if ((i % 5 == 0) && (i % 3 == 0)){
+			write_gpio(led4, HIGH);
+		}
+		else if (i % 3 == 0){
+			write_gpio(led2, HIGH);
+		}
+		else if (i % 5 == 0){
+			write_gpio(led3, HIGH);
+		}
+		i++;
+		ledMail->ledCounter = i;
+		osMailPut(mail_box, ledMail);
+		osDelay(1500);
+	}
+}

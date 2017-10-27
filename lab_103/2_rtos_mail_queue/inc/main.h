@@ -24,7 +24,9 @@ typedef struct
   float     voltage;
   float     current;
   uint32_t  counter;
+	uint32_t	ledCounter;
 } 
 mail_t;
+
 
 #endif // MAIN_H

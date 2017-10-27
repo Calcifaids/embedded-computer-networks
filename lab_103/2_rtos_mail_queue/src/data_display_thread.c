@@ -69,7 +69,7 @@ void display_thread(void const *argument)
       printf("\nVoltage: %.2f V\n\r"   , mail->voltage);
       printf("Current: %.2f A\n\r"     , mail->current);
       printf("Number of cycles: %u\n\r", mail->counter);
-
+			printf("Led counter: %u\n\r", mail->ledCounter);
       osMailFree(mail_box, mail);
     }
   }
