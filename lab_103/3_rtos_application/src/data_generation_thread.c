@@ -111,8 +111,10 @@ void data_thread(void const *argument)
 		
 		mail->ldrVal = ldrStore; 
 		
-		// generate data
-    mail->potVal = read_adc(pot);
+		// read adc and convert to pixels 
+		float interStore = (read_adc(pot) * 100) / 4095;
+		uint16_t potStore = interStore;
+    mail->potVal = potStore;
     
     // put the data in the mail box and wait for one second
     osMailPut(mail_box, mail);

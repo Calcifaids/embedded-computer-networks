@@ -21,7 +21,7 @@
 // mail data structure
 typedef struct 
 {
-  float     potVal;
+  uint16_t   potVal;
   uint8_t    ldrVal;
   float		  tempVal;
 } 

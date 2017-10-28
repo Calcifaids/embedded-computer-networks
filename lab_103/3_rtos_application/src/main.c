@@ -18,7 +18,6 @@
 // declare the extern methods that set the threads up for us 
 extern int init_data_thread(void);
 extern int init_display_thread(void);
-
 // this is the main method
 int main()
 { 
@@ -45,4 +44,10 @@ int main()
   
   // start everything running
   osKernelStart();
+}
+
+// OVERRIDE HAL DELAY
+// make HAL_Delay point to osDelay (otherwise any use of HAL_Delay breaks things)
+void HAL_Delay(__IO uint32_t Delay){
+	osDelay(Delay);
 }

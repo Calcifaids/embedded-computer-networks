@@ -23,6 +23,8 @@
 #include "serial.h"
 #include "gpio.h"
 #include "stm32746g_discovery_lcd.h"
+#include "stm32746g_discovery_sdram.h"
+#include "stm32f7xx_hal.h"
 
 // RTOS DEFINES
 
@@ -95,14 +97,52 @@ void display_thread(void const *argument)
     if(evt.status == osEventMail)
     {
       mail_t *mail = (mail_t*)evt.value.p;
-			sprintf(str, "temp = %f\370c", mail->tempVal);
-			BSP_LCD_ClearStringLine(5);
-			BSP_LCD_DisplayStringAtLine(5, (uint8_t *)str);
+			//Print Temp to LCD
+			sprintf(str, "Temperature = %.2f\223c", mail->tempVal);
+			BSP_LCD_ClearStringLine(1);
+			BSP_LCD_DisplayStringAtLine(1, (uint8_t *)str);
 			
+			//Print Luminosity
+			sprintf(str, "Luminosity = %d%%", mail->ldrVal);
+			BSP_LCD_ClearStringLine(2);
+			BSP_LCD_DisplayStringAtLine(2, (uint8_t *)str);
+			//redefine value to pixel range
+			uint16_t ldrBar = (mail->ldrVal * 480) / 100;
+			BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+			BSP_LCD_FillRect(0, 74, 480, 20);
 			
-      printf("\nRaw Pot: %.2f V\n\r"   , mail->potVal);
-      printf("Luminosity: %d \n\r"     , mail->ldrVal);
-      //printf("Temp: %.2f\n\r", mail->tempVal);
+			BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+			BSP_LCD_FillRect(0, 74, ldrBar, 20);
+			
+			//Print Potentiometer
+			//NEED TO FIX, WHEN potval = 0, also effects temp val + luminosity bar
+			sprintf(str, "Potentiometer = %d", mail->potVal);
+			BSP_LCD_ClearStringLine(4);
+			BSP_LCD_DisplayStringAtLine(4, (uint8_t *)str);
+			//redine value to pixels
+			uint16_t potBar = (mail->potVal * 480) / 100;
+			BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
+			BSP_LCD_FillRect(0, 122, 480, 20);
+			
+			BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+			BSP_LCD_FillRect(0, 122, potBar, 20);
+			
+			if ((mail->potVal >= 50) && (mail->ldrVal >= 50)){
+				write_gpio(led2, HIGH);
+				write_gpio(led3, HIGH);
+			}
+			else if (mail->potVal >= 50){
+				write_gpio(led2, LOW);
+				write_gpio(led3, HIGH);
+			}
+			else if (mail->ldrVal >= 50){
+				write_gpio(led2, HIGH);
+				write_gpio(led3, LOW);
+			}
+			else{
+					write_gpio(led2, LOW);
+					write_gpio(led3, LOW);
+			}				
       osMailFree(mail_box, mail);
     }
   }
