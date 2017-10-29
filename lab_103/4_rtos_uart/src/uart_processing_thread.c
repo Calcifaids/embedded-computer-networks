@@ -25,7 +25,7 @@
 #include "pinmappings.h"
 #include "clock.h"
 #include "gpio.h"
-
+#include "adc.h"
 // RTOS DEFINES
 
 // declare the thread function prototypes, thread id, and priority
@@ -41,7 +41,11 @@ osMessageQId msg_q;
 // HARDWARE DEFINES
 
 // map the led to GPIO PI2 
-gpio_pin_t led = {PI_1, GPIOI, GPIO_PIN_2};
+gpio_pin_t led = {PI_2, GPIOI, GPIO_PIN_2};
+gpio_pin_t led2 = {PF_7, GPIOF, GPIO_PIN_7};
+gpio_pin_t led3 = {PF_8, GPIOF, GPIO_PIN_8};
+gpio_pin_t button = {PA_15, GPIOA, GPIO_PIN_15};
+gpio_pin_t pot = {PA_0, GPIOA, GPIO_PIN_0};
 
 // THREAD INITIALISATION
 
@@ -50,7 +54,10 @@ int init_uart_threads(void)
 {
   // initialise gpio output for led
   init_gpio(led, OUTPUT);
-  
+	init_gpio(led2, OUTPUT);
+	init_gpio(led3, OUTPUT);
+	init_gpio(button, INPUT);
+	init_adc(pot);
   // set up the uart at 9600 baud and enable the rx interrupts
   init_uart(9600);
   enable_rx_interrupt();
@@ -78,7 +85,7 @@ int init_uart_threads(void)
 void uart_rx_thread(void const *argument)
 {
   // print some status message ...
-  printf("still alive!\r\n");
+  printf("still alive!\r\nType help for commands\r\n");
   
   // create a packet array to use as a buffer to build up our string
   uint8_t packet[128];
@@ -110,17 +117,87 @@ void uart_rx_thread(void const *argument)
         // correctly
         // see: http://www.tutorialspoint.com/c_standard_library/c_function_strcmp.htm
         // for strcmp details ...
-        if(strcmp((char*)packet, "on-led1\r") == 0)
+				
+				//Test start of line to prevent excessive checks when false inputs
+				if(strncmp((char*)packet, "on-",3) == 0){
+					if(strcmp((char*)packet, "on-led1\r") == 0)
+					{
+						write_gpio(led, HIGH);
+						printf("led 1 on\r\n");
+					}
+					if(strcmp((char*)packet, "on-led2\r") == 0)
+					{
+						write_gpio(led2, HIGH);
+						printf("led 2 on\r\n");
+					}
+					if(strcmp((char*)packet, "on-led3\r") == 0)
+					{
+						write_gpio(led3, HIGH);
+						printf("led 3 on\r\n");
+					}
+					if(strcmp((char*)packet, "on-all\r") == 0)
+					{
+						write_gpio(led, HIGH);
+						write_gpio(led2, HIGH);
+						write_gpio(led3, HIGH);
+						printf("all led's on\r\n");
+					}
+				}
+				if(strncmp((char*)packet, "off-",3) == 0){
+					if(strcmp((char*)packet, "off-led1\r") == 0)
+					{
+						write_gpio(led, LOW);
+						printf("led 1 off\r\n");
+					}
+					if(strcmp((char*)packet, "off-led2\r") == 0)
+					{
+						write_gpio(led2, LOW);
+						printf("led 2 off\r\n");
+					}
+					if(strcmp((char*)packet, "off-led3\r") == 0)
+					{
+						write_gpio(led3, LOW);
+						printf("led 3 off\r\n");
+					}
+					if(strcmp((char*)packet, "off-all\r") == 0)
+					{
+						write_gpio(led, LOW);
+						write_gpio(led2, LOW);
+						write_gpio(led3, LOW);
+						printf("all led's off\r\n");
+					}
+				}
+				if(strncmp((char*)packet, "read-",3) == 0){
+					if(strcmp((char*)packet, "read-pot\r") == 0){
+						uint16_t potVal = read_adc(pot);
+						printf("Value on pot is: %d",potVal);
+						printf("\r\n");
+					}
+					if(strcmp((char*)packet, "read-button\r") == 0){
+						uint8_t buttonVal = read_gpio(button);
+						if (buttonVal == 0){
+							printf("Button is un-pressed\r\n");
+						}
+						else{
+							printf("Button is pressed\r\n");
+						}
+					}
+				}
+				if(strcmp((char*)packet, "help\r") == 0)
         {
-          write_gpio(led, HIGH);
-          printf("led 1 on\r\n");
+          printf("Available commands are:\r\n");
+					printf("on-led1\n");
+					printf("off-led1\n");
+					printf("on-led2\n");
+					printf("off-led2\n");
+					printf("on-led3\n");
+					printf("off-led3\n");
+					printf("on-all\n");
+					printf("off-all\n");
+					printf("read-pot\n");
+					printf("read-button\n");
         }
-        if(strcmp((char*)packet, "off-led1\r") == 0)
-        {
-          write_gpio(led, LOW);
-          printf("led 1 off\r\n");
-        }
-        
+				
         // print debugging message to the uart
         printf("DEBUGGING: %s\r\n", packet);
         
