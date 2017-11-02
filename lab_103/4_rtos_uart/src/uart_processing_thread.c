@@ -102,7 +102,6 @@ void uart_rx_thread(void const *argument)
     {
       // get the message and increment the counter
       uint8_t byte = evt.value.v;
-      
       // if we get a new line character ...
       if(byte == '\n')
       {    
@@ -206,8 +205,13 @@ void uart_rx_thread(void const *argument)
       }
       else
       {
-        packet[i] = byte;
-        i++;
+				if((byte == '\b') && (i != 0)){
+					i--;
+				}
+				else{
+					packet[i] = byte;
+					i++;
+				}
       }       
     }
   } 
