@@ -106,8 +106,9 @@ void display_thread(void const *argument)
 			sprintf(str, "Luminosity = %d%%", mail->ldrVal);
 			BSP_LCD_ClearStringLine(2);
 			BSP_LCD_DisplayStringAtLine(2, (uint8_t *)str);
+			
 			//redefine value to pixel range
-			uint16_t ldrBar = (mail->ldrVal * 480) / 100;
+			uint16_t ldrBar = (mail->ldrVal * 479) / 100.0;
 			BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
 			BSP_LCD_FillRect(0, 74, 480, 20);
 			
@@ -119,11 +120,11 @@ void display_thread(void const *argument)
 			sprintf(str, "Potentiometer = %d", mail->potVal);
 			BSP_LCD_ClearStringLine(4);
 			BSP_LCD_DisplayStringAtLine(4, (uint8_t *)str);
+			
 			//redine value to pixels
-			uint16_t potBar = (mail->potVal * 480) / 100;
+			uint16_t potBar = (mail->potVal * 479) / 100.0;
 			BSP_LCD_SetTextColor(LCD_COLOR_BROWN);
 			BSP_LCD_FillRect(0, 122, 480, 20);
-			
 			BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
 			BSP_LCD_FillRect(0, 122, potBar, 20);
 			

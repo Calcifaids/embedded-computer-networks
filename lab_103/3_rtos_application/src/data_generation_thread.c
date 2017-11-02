@@ -80,13 +80,18 @@ void data_thread(void const *argument)
   {
     // create our mail (i.e. the message container)   
     mail_t* mail = (mail_t*) osMailAlloc(mail_box, osWaitForever);    
-        
-    float adcStore;
+     
+		// read adc and convert to pixels 
+		float interStore = (read_adc(pot) * 100) / 4095.0;
+		uint16_t potStore = interStore;
+    mail->potVal = potStore;
+
 		
+    float adcStore;
 		//Store and convert temp
 		adcStore = read_adc(temp);
-		adcStore = (adcStore * 5000) / 4095;
-		adcStore = (adcStore - 500) /10;
+		adcStore = (adcStore * 5000) / 4095.0;
+		adcStore = (adcStore - 500) /10.0;
 		//Store to mail queue
 		mail->tempVal = adcStore;
 		
@@ -104,18 +109,13 @@ void data_thread(void const *argument)
 		uint16_t ldrStore = read_adc(ldr);
 		// equation as follows: 
 		// (actualInput - inputMin) * (outputMax - outputMin) / (inputMax - inputMin) + outputMin
-		ldrStore = (ldrStore - 25) * 75 / 475;
+		ldrStore = (ldrStore - 25) * 75 / 475.0;
 		if (ldrStore > 100){
 				ldrStore = 100;
 		}
 		
 		mail->ldrVal = ldrStore; 
-		
-		// read adc and convert to pixels 
-		float interStore = (read_adc(pot) * 100) / 4095;
-		uint16_t potStore = interStore;
-    mail->potVal = potStore;
-    
+		    
     // put the data in the mail box and wait for one second
     osMailPut(mail_box, mail);
     osDelay(500);
