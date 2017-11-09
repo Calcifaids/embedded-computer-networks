@@ -30,10 +30,10 @@
 
 
 // Hardware Defines
-gpio_pin_t led1 = {PI_1, GPIOI, GPIO_PIN_1};
-gpio_pin_t led2 = {PF_6, GPIOF, GPIO_PIN_6};
-gpio_pin_t led3 = {PF_7, GPIOF, GPIO_PIN_7};
-gpio_pin_t led4 = {PF_8, GPIOF, GPIO_PIN_8};
+//gpio_pin_t led1 = {PI_1, GPIOI, GPIO_PIN_1};
+//gpio_pin_t led2 = {PF_6, GPIOF, GPIO_PIN_6};
+//gpio_pin_t led3 = {PF_7, GPIOF, GPIO_PIN_7};
+//gpio_pin_t led4 = {PF_8, GPIOF, GPIO_PIN_8};
 
 // declare the thread function prototypes, thread id, and priority
 void display_thread(void const *argument);
@@ -49,10 +49,10 @@ extern osMailQId mail_box;
 int init_display_thread(void)
 {
 	//Init LEDs
-	init_gpio(led1, OUTPUT);
-	init_gpio(led2, OUTPUT);
-  init_gpio(led3, OUTPUT);
-	init_gpio(led4, OUTPUT);
+	//init_gpio(led1, OUTPUT);
+	//init_gpio(led2, OUTPUT);
+  //init_gpio(led3, OUTPUT);
+	//init_gpio(led4, OUTPUT);
 	
 	// initialise the lcd
   BSP_LCD_Init();
@@ -91,21 +91,24 @@ void display_thread(void const *argument)
   // infinite loop getting out fake data ...
   while(1)
   {
-		char str[12];
     // get the data ...
     osEvent evt = osMailGet(mail_box, osWaitForever);
     if(evt.status == osEventMail)
     {
       mail_t *mail = (mail_t*)evt.value.p;
+			
 			//Print Temp to LCD
-			sprintf(str, "Temperature = %.2f\223c", mail->tempVal);
-			BSP_LCD_ClearStringLine(1);
-			BSP_LCD_DisplayStringAtLine(1, (uint8_t *)str);
+			char str1[28];
+			sprintf(str1, "Temperature = %6.2f'C     ", mail->tempVal);
+			//BSP_LCD_ClearStringLine(1);
+			BSP_LCD_DisplayStringAtLine(1, (uint8_t *)str1);
 			
 			//Print Luminosity
-			sprintf(str, "Luminosity = %d%%", mail->ldrVal);
-			BSP_LCD_ClearStringLine(2);
-			BSP_LCD_DisplayStringAtLine(2, (uint8_t *)str);
+			
+			char str2[28];
+			sprintf(str2, "Luminosity = %4d          ", mail->ldrVal);
+			//BSP_LCD_ClearStringLine(2);
+			BSP_LCD_DisplayStringAtLine(2, (uint8_t *)str2);
 			
 			//redefine value to pixel range
 			uint16_t ldrBar = (mail->ldrVal * 479) / 100.0;
@@ -116,10 +119,12 @@ void display_thread(void const *argument)
 			BSP_LCD_FillRect(0, 74, ldrBar, 20);
 			
 			//Print Potentiometer
-			//NEED TO FIX, WHEN potval = 0, also effects temp val + luminosity bar
-			sprintf(str, "Potentiometer = %d", mail->potVal);
-			BSP_LCD_ClearStringLine(4);
-			BSP_LCD_DisplayStringAtLine(4, (uint8_t *)str);
+
+			
+			char str3[28];
+			sprintf(str3, "Potentiometer = %4d       ", mail->potVal);
+			//BSP_LCD_ClearStringLine(4);
+			BSP_LCD_DisplayStringAtLine(4, (uint8_t *)str3);
 			
 			//redine value to pixels
 			uint16_t potBar = (mail->potVal * 479) / 100.0;
@@ -128,22 +133,22 @@ void display_thread(void const *argument)
 			BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
 			BSP_LCD_FillRect(0, 122, potBar, 20);
 			
-			if ((mail->potVal >= 50) && (mail->ldrVal >= 50)){
-				write_gpio(led2, HIGH);
-				write_gpio(led3, HIGH);
-			}
-			else if (mail->potVal >= 50){
-				write_gpio(led2, LOW);
-				write_gpio(led3, HIGH);
-			}
-			else if (mail->ldrVal >= 50){
-				write_gpio(led2, HIGH);
-				write_gpio(led3, LOW);
-			}
-			else{
-					write_gpio(led2, LOW);
-					write_gpio(led3, LOW);
-			}				
+//			if ((mail->potVal >= 50) && (mail->ldrVal >= 50)){
+//				write_gpio(led2, HIGH);
+//				write_gpio(led3, HIGH);
+//			}
+//			else if (mail->potVal >= 50){
+//				write_gpio(led2, LOW);
+//				write_gpio(led3, HIGH);
+//			}
+//			else if (mail->ldrVal >= 50){
+//				write_gpio(led2, HIGH);
+//				write_gpio(led3, LOW);
+//			}
+//			else{
+//					write_gpio(led2, LOW);
+//					write_gpio(led3, LOW);
+//			}				
       osMailFree(mail_box, mail);
     }
   }

@@ -37,11 +37,11 @@ osMailQId  mail_box;
 // HARDWARE DEFINES
 
 // led is on PI 1 (this is the inbuilt led)
-gpio_pin_t temp = {PF_9, GPIOF, GPIO_PIN_9};
+//gpio_pin_t temp = {PF_9, GPIOF, GPIO_PIN_9};
 
-//gpio_pin_t temp = {PF_6, GPIOF, GPIO_PIN_6};
-gpio_pin_t ldr 	= {PF_10, GPIOF, GPIO_PIN_10};
-gpio_pin_t pot 		= {PA_0, GPIOA, GPIO_PIN_0};
+gpio_pin_t temp = {PF_6, GPIOF, GPIO_PIN_6};
+gpio_pin_t ldr 	= {PF_7, GPIOF, GPIO_PIN_7};
+gpio_pin_t pot  = {PF_8, GPIOF, GPIO_PIN_8};
 
 // THREAD INITIALISATION
 
@@ -83,17 +83,15 @@ void data_thread(void const *argument)
     // create our mail (i.e. the message container)   
     mail_t* mail = (mail_t*) osMailAlloc(mail_box, osWaitForever);    
      
-		// read adc and convert to pixels 
-		float interStore = (read_adc(pot) * 100) / 4095.0;
-		uint16_t potStore = interStore;
+		// read adc and convert to % 
+		uint16_t potStore = (read_adc(pot) * 100) / 4095.0;
     mail->potVal = potStore;
-
 		
     float adcStore;
 		//Store and convert temp
 		adcStore = read_adc(temp);
-		adcStore = (adcStore * 5000) / 4095.0;
-		adcStore = (adcStore - 500) /10.0;
+		adcStore = (adcStore * 3300) / 4095.0;
+		adcStore = (adcStore - 500) / 10.0;
 		//Store to mail queue
 		mail->tempVal = adcStore;
 		
