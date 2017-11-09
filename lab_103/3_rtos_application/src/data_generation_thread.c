@@ -38,6 +38,8 @@ osMailQId  mail_box;
 
 // led is on PI 1 (this is the inbuilt led)
 gpio_pin_t temp = {PF_9, GPIOF, GPIO_PIN_9};
+
+//gpio_pin_t temp = {PF_6, GPIOF, GPIO_PIN_6};
 gpio_pin_t ldr 	= {PF_10, GPIOF, GPIO_PIN_10};
 gpio_pin_t pot 		= {PA_0, GPIOA, GPIO_PIN_0};
 
