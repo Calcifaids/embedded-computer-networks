@@ -27,6 +27,7 @@
 #include "data_processing.h"
 
 
+
 // lets use an led as a message indicator
 gpio_pin_t led = {PI_3, GPIOI, GPIO_PIN_3};
 
@@ -34,6 +35,10 @@ gpio_pin_t led = {PI_3, GPIOI, GPIO_PIN_3};
 
 // Declare Threads Here!!
 extern int init_xbee_threads(void);
+
+//Timer definition
+void poll_Xbee_Inputs(void const *arg);
+osTimerDef(poll_Xbee_in, poll_Xbee_Inputs);
 
 // OVERRIDE HAL DELAY
 // make HAL_Delay point to osDelay (otherwise any use of HAL_Delay breaks things)
@@ -112,21 +117,14 @@ int main()
 	send_xbee(my_packet, 19);
 	init_gpio(led, OUTPUT);
 	
+	//osTimerDef(poll_Xbee_in, poll_Xbee_Inputs);
+	osTimerId pollXbee = osTimerCreate(osTimer(poll_Xbee_in), osTimerPeriodic, NULL);
+	osTimerStart(pollXbee, 2000);
 
 	// start everything running
 	osKernelStart();
+}
+
+void poll_Xbee_Inputs(void const *arg){
 	send_xbee(is_packet, 19);
-	osDelay(6000);
-	send_xbee(is_packet, 19);
-	osDelay(6000);
-	send_xbee(is_packet, 19);
-	osDelay(6000);
-	send_xbee(is_packet, 19);
-	osDelay(6000);
-	send_xbee(is_packet, 19);
-	osDelay(6000);
-	send_xbee(is_packet, 19);
-	osDelay(6000);
-	send_xbee(is_packet, 19);
-	
 }
