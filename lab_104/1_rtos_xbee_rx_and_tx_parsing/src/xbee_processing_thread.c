@@ -109,6 +109,7 @@ void xbee_rx_thread(void const *argument)
 				uint8_t packet[len];
 				get_packet(packet);
 				
+				printf("Packet length = %d \r\n",len);
 				// display the packet
 				int i = 0;
 				for(i = 0; i < len; i++)
