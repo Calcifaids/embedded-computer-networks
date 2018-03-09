@@ -117,7 +117,7 @@ int main()
 	send_xbee(my_packet, 19);
 	init_gpio(led, OUTPUT);
 	
-	//osTimerDef(poll_Xbee_in, poll_Xbee_Inputs);
+
 	osTimerId pollXbee = osTimerCreate(osTimer(poll_Xbee_in), osTimerPeriodic, NULL);
 	osTimerStart(pollXbee, 2000);
 

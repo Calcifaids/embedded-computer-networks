@@ -26,6 +26,7 @@
 
 // include main.h with the mail type declaration
 #include "main.h"
+#include "gpio.h"
 
 // RTOS DEFINES
 
@@ -47,6 +48,10 @@ osMessageQId msg_q;
 osMailQDef(mail_box, 16, mail_t);
 osMailQId  mail_box;
 
+//Timer definition
+void poll_Button_Inputs(void const *arg);
+osTimerDef(poll_Button_In, poll_Button_Inputs);
+
 // Semaphores & Mutexes
 osMutexDef(address_mutex);
 osMutexId(address_val_mutex);
@@ -54,6 +59,14 @@ osMutexDef(sensor_mutex);
 osMutexId(sensor_val_mutex);
 osMutexDef(armed_mutex);
 osMutexId(armed_state_mutex);
+
+//GPIO defines
+
+gpio_pin_t pb1 = {PA_8, GPIOA, GPIO_PIN_8};
+gpio_pin_t pb2 = {PA_15, GPIOA, GPIO_PIN_15};
+gpio_pin_t pb3 = {PG_6, GPIOG, GPIO_PIN_6};
+gpio_pin_t pb4 = {PG_7, GPIOG, GPIO_PIN_7};
+
 
 // process packet function
 void process_packet(uint8_t* packet, int length);
@@ -106,7 +119,16 @@ int init_xbee_threads(void)
 	// create the threads and get their task id
 	tid_xbee_rx_thread = osThreadCreate(osThread(xbee_rx_thread), NULL);
 	tid_action_thread = osThreadCreate(osThread(action_thread), NULL);
-
+	
+	//Init GPIO
+	init_gpio(pb1, INPUT);
+	init_gpio(pb2, INPUT);
+	init_gpio(pb3, INPUT);
+	init_gpio(pb4, INPUT);
+	
+	osTimerId pollButton = osTimerCreate(osTimer(poll_Button_In), osTimerPeriodic, NULL);
+	osTimerStart(pollButton, 20);
+	
 	// check if everything worked ...
 	if(!tid_xbee_rx_thread)
 	{
@@ -363,10 +385,7 @@ void xbee_rx_thread(void const *argument)
 					varMail->lightState = 2;
 				}
 
-				
-				
-				
-				
+
 				//Check heating  
 				if(node[i].heatingOverride == 0){
 					//Someone has entered or room is occupied
@@ -567,148 +586,6 @@ void xbee_rx_thread(void const *argument)
 					varMail->heaterState = 2;
 					varMail->acState = 2;
 				}
-				
-				
-				
-				
-				
-/*				
-					//determine AC/Heater
-				//Checker state 0 = off, 1 = heater on, 2 = ac on
-				if(node[i].heatingOverride == 0 && node[i].acOverride == 0){
-					if(node[i].prevPirLevel != node[i].pirLevel){
-							//Someone has left
-							if(node[i].pirLevel == 0){
-								printf("Someone has left\r\n");
-								varMail->heaterState = 2;
-								varMail->acState = 2;
-							}
-							//Someone has entered
-							else{
-								printf("Someone has entered and ");
-								if(node[i].tempLevel < node[i].lowerHeatThreshold){
-									printf("temp is to low so heater on\r\n");
-									varMail->heaterState = 1;
-									varMail->acState = 2;
-									node[i].changeCheck[1] = 1;
-								}
-								else if(node[i].tempLevel > node[i].upperHeatThreshold){
-									printf("temp is to high so ac on\r\n");
-									varMail->acState = 1;
-									varMail->heaterState = 2;
-									node[i].changeCheck[1] = 2;
-								}
-								else{
-									printf("temp is just right so doing nothing\r\n");
-									varMail->heaterState = 2;
-									varMail->acState = 2;
-								}
-							}
-						}
-						//room is vacant or occupied
-						else{
-							//Room is vacant
-							if(node[i].pirLevel == 0){
-								printf("room is vacant and ");
-								//First time since left then turn off
-								if(node[i].changeCheck[1] == 1){
-									printf("turning heater off\r\n");
-									varMail->heaterState = 0;
-									varMail->acState = 2;
-									node[i].changeCheck[1] = 0;
-								}
-								else if(node[i].changeCheck[1] == 2){
-									printf("turning ac off\r\n");
-									varMail->acState = 0;
-									varMail->heaterState = 2;
-									node[i].changeCheck[1] = 0;
-								}
-								else{
-									printf("don't care\r\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
-								}
-							}
-							//Room is occupied
-							else{
-								printf("room is occupied and ");
-								//Room too cold
-								if(node[i].tempLevel < node[i].lowerHeatThreshold){
-									//Turning heater on from being off
-									if(node[i].changeCheck[1] == 0){
-										printf("temp is to low so heater on\r\n");
-										varMail->heaterState = 1;
-										varMail->acState = 2;
-										node[i].changeCheck[1] = 1;
-									}
-									//Turning heater on from being on AC
-									else if(node[i].changeCheck[1] == 2){
-										printf("temp is to low, turning ac off and heater on\r\n");
-										varMail->heaterState = 1;
-										varMail->acState = 0;
-										node[i].changeCheck[1] = 1;
-									}
-									//Don't need to do anything
-									else{
-										printf("don't care\r\n");
-										varMail->acState = 2;
-										varMail->heaterState = 2;
-									}
-								}
-								//Room too hot
-								else if (node[i].tempLevel > node[i].upperHeatThreshold){
-									//Turning ac on from being off
-									if(node[i].changeCheck[1] == 0){
-										printf("temp is to high so ac on\r\n");
-										varMail->heaterState = 2;
-										varMail->acState = 1;
-										node[i].changeCheck[1] = 2;
-									}
-									//Turning heater on from being on AC
-									else if(node[i].changeCheck[1] == 1){
-										printf("temp is to high, turning heater off and ac on\r\n");
-										varMail->heaterState = 0;
-										varMail->acState = 1;
-										node[i].changeCheck[1] = 2;
-									}
-									//Don't need to do anything
-									else{
-										printf("don't care\r\n");
-										varMail->acState = 2;
-										varMail->heaterState = 2;
-									}
-								}
-								//Room just fine
-								else{
-									//Turn off heating
-									if(node[i].changeCheck[1] == 1){
-										printf("temp is fine so turn off heating\r\n");
-										varMail->heaterState = 0;
-										varMail->acState = 2;
-										node[i].changeCheck[1] = 0;
-									}
-									//Turn off ac
-									else if(node[i].changeCheck[1] == 2){
-										printf("temp is fine so turn off ac\r\n");
-										varMail->heaterState = 2;
-										varMail->acState = 0;
-										node[i].changeCheck[1] = 0;
-									}
-									//Nothing needs to be done
-									else{
-										printf("don't care\r\n");
-										varMail->acState = 2;
-										varMail->heaterState = 2;
-									}
-								}
-							}
-						}
-				}	
-				else{
-					varMail->heaterState = 2;
-					varMail->acState = 2;
-				}
-					*/
 					
 						/*RELEASE MUTEXES HERE?*/
 					
@@ -893,3 +770,77 @@ void action_thread(void const *argument){
 }
 
 
+//Poll buttons every 5ms and generate a bitstream.
+//Generate a 4 bit code through shifting 
+void poll_Button_Inputs(void const *arg){
+	
+	static uint8_t button_history[4] = {0xFF, 0xFF, 0xFF, 0xFF};
+	static uint16_t passcodeBuffer = 0;
+	static uint8_t armingVar = 0, timeTillArm = 10, countdownTimestamp = 1, timeout = 1;
+	
+	//Check for timeout on passcode entry
+	if(timeout >= 200){
+		passcodeBuffer = 0;
+		timeout = 1;
+		printf("password timeout\r\n");
+	}
+	
+	//Itterate through each value and store to history
+	for (int i = 0; i < 4; i++){
+		button_history[i] = button_history[i] << 1;
+		uint8_t val;
+		switch(i){
+			case 0:
+				val = read_gpio(pb1);
+				break;
+			case 1:
+				val = read_gpio(pb2);
+				break;
+			case 2:
+				val = read_gpio(pb3);
+				break;
+			case 3:
+				val = read_gpio(pb4);
+				break;
+		}
+		button_history[i] = button_history[i] | val;
+		
+		if((button_history[i] & 0xDF) == 0x07){
+			//Shift on value of pressed button to password buffer
+			passcodeBuffer = passcodeBuffer << 3;
+			passcodeBuffer = passcodeBuffer | i+1;
+			timeout = 1;
+			printf("passcode buffer = %02X\r\n", passcodeBuffer);
+			//Check if successful combination input
+			//Code == 1243
+			if((passcodeBuffer & 0xFFFF) == 0x2A3){
+				passcodeBuffer = 0;
+				countdownTimestamp = 1;
+				armingVar = ~armingVar;
+				if(armingVar == 0){
+					/*!TURN OFF ARMING SYSTEM HERE!*/
+					timeTillArm = 10;
+					printf("Disarming System Now!\r\n");
+					armedState = 0;
+				}
+			}
+		}
+	}
+	
+	//HAL get tick not working correctly, therefor ~50 entries when arming on = 1s
+	//Wait 10 seconds and then set global armed state
+	if(armingVar == 0xFF && timeTillArm != 0){
+		countdownTimestamp ++;
+		if(countdownTimestamp == 50){
+			timeTillArm --;
+			printf("arming in %d seconds\r\n", timeTillArm);
+			if(timeTillArm == 0){
+				/*!TURN ON ARMING SYSTEM!*/
+				printf("Arming System Now!\r\n");
+				armedState = 1;
+			}
+			countdownTimestamp = 1;
+		}
+	}
+	timeout ++;
+}
