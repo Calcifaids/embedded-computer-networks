@@ -28,6 +28,8 @@
 #include "main.h"
 #include "gpio.h"
 
+
+
 // RTOS DEFINES
 
 // declare the thread function prototypes, thread id, and priority
@@ -52,6 +54,7 @@ osMailQId  mail_box;
 void poll_Button_Inputs(void const *arg);
 osTimerDef(poll_Button_In, poll_Button_Inputs);
 
+
 // Semaphores & Mutexes
 osMutexDef(address_mutex);
 osMutexId(address_val_mutex);
@@ -66,6 +69,7 @@ gpio_pin_t pb1 = {PA_8, GPIOA, GPIO_PIN_8};
 gpio_pin_t pb2 = {PA_15, GPIOA, GPIO_PIN_15};
 gpio_pin_t pb3 = {PG_6, GPIOG, GPIO_PIN_6};
 gpio_pin_t pb4 = {PG_7, GPIOG, GPIO_PIN_7};
+gpio_pin_t alarmOutput = {PB_15, GPIOB, GPIO_PIN_15};
 
 
 // process packet function
@@ -125,6 +129,7 @@ int init_xbee_threads(void)
 	init_gpio(pb2, INPUT);
 	init_gpio(pb3, INPUT);
 	init_gpio(pb4, INPUT);
+	init_gpio(alarmOutput, OUTPUT);
 	
 	osTimerId pollButton = osTimerCreate(osTimer(poll_Button_In), osTimerPeriodic, NULL);
 	osTimerStart(pollButton, 20);
@@ -259,8 +264,6 @@ void xbee_rx_thread(void const *argument)
 					/*ANOTHER MUTEX HERE?*/
 					
 					//Set PIR val
-					//node[i].prevPirLevel = node[i].pirLevel;
-					
 					
 					//shift old onto previous values
 					node[i].prevPirLevel = node[i].prevPirLevel << 1;
@@ -290,10 +293,12 @@ void xbee_rx_thread(void const *argument)
 					
 					if(armedState == 1){
 						//Turn off all heaters etc
+						static uint8_t doAlertOnce = 0;
 						if(doArmedOnce == 0){
 							doArmedOnce = 1;
 							printf("in armed once area\r\n");
 							for(int j = 0; j <  2; j++){
+								node[i].pirLevel = 0;
 								mail_t* armedMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
 								armedMail->slAddress = node[j].slAddress;
 								armedMail->myAddress = node[j].myAddress;
@@ -301,10 +306,13 @@ void xbee_rx_thread(void const *argument)
 								armedMail->heaterState = 0;
 								armedMail->lightState = 0;
 								osMailPut(mail_box, armedMail);
+								doAlertOnce = 1;
 							}
 						}
-						if(node[i].pirLevel == 1){
+						if(node[i].pirLevel == 1 && doAlertOnce == 1){
 							printf("!!intruder Alert!!\r\n");
+							doAlertOnce = 0;
+							write_gpio(alarmOutput, 1);
 						}
 					}
 					else if (armedState == 0){
@@ -618,6 +626,8 @@ void xbee_rx_thread(void const *argument)
 	}
 }
 
+
+
 //Set value template packet
 //							|  SH bits  | SL bits  || MY |      |pn|st|chk
 //7E 00 10 17 01 00 13 A2 00 FF FF FF FF FF FE 02 44 32 04 BD
@@ -628,7 +638,6 @@ void xbee_rx_thread(void const *argument)
 //set bits = array element 18 (low = 04, high = 05)
 //Checksum = array element 19
 
-
 void action_thread(void const *argument){
 	uint8_t const hard_Set_Packet[] = {0x7E, 0x00, 0x10, 0x17, 0x01, 0x00, 0x13, 0xA2, 0x00, 
 		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x02, 0x44, 0x32, 0x04, 0x00};
@@ -637,7 +646,6 @@ void action_thread(void const *argument){
 		
 	uint8_t lightPin = 0x32, heaterPin = 0x35, acPin = 0x36;
 	uint8_t setLow = 0x4, setHigh = 0x5;
-	uint8_t n = sizeof(hard_Set_Packet)/sizeof(hard_Set_Packet[0]);
 	
 	while(1){
 		//idle until action event
@@ -657,21 +665,17 @@ void action_thread(void const *argument){
 			for (int i = 0; i < 20; i++){
 				template_Dig_Out[i] = hard_Set_Packet[i];
 			}
-			
-			
+
 				//Set SH
 				
-					template_Dig_Out[9] = (0xFF000000 & mail->slAddress) >> 24;
-					template_Dig_Out[10] = (0x00FF0000 & mail->slAddress) >> 16;
-					template_Dig_Out[11] = (0x0000FF00 & mail->slAddress) >> 8;
-					template_Dig_Out[12] = (0x000000FF & mail->slAddress);
-					
-					//Set MY
-					template_Dig_Out[13] = (0xFF00 & mail->myAddress) >> 8;
-					template_Dig_Out[14] = (0xFF & mail->myAddress);
+				template_Dig_Out[9] = (0xFF000000 & mail->slAddress) >> 24;
+				template_Dig_Out[10] = (0x00FF0000 & mail->slAddress) >> 16;
+				template_Dig_Out[11] = (0x0000FF00 & mail->slAddress) >> 8;
+				template_Dig_Out[12] = (0x000000FF & mail->slAddress);
 				
-
-				
+				//Set MY
+				template_Dig_Out[13] = (0xFF00 & mail->myAddress) >> 8;
+				template_Dig_Out[14] = (0xFF & mail->myAddress);
 			
 				//Send Light
 				if(mail->lightState != 2){
@@ -839,8 +843,8 @@ void poll_Button_Inputs(void const *arg){
 			timeout = 1;
 			printf("passcode buffer = %02X\r\n", passcodeBuffer);
 			//Check if successful combination input
-			//Code == 1243
-			if((passcodeBuffer & 0xFFFF) == 0x2A3){
+			//Code == 1243 (Designed so that leeway if mistake was made (Don't need to wait for timeout))
+			if((passcodeBuffer & 0x2A3) == 0x2A3){
 				passcodeBuffer = 0;
 				countdownTimestamp = 1;
 				armingVar = ~armingVar;
@@ -849,6 +853,7 @@ void poll_Button_Inputs(void const *arg){
 					timeTillArm = 10;
 					printf("Disarming System Now!\r\n");
 					armedState = 0;
+					write_gpio(alarmOutput, 0);
 				}
 			}
 		}
@@ -872,3 +877,4 @@ void poll_Button_Inputs(void const *arg){
 	}
 	timeout ++;
 }
+
