@@ -95,7 +95,7 @@ struct Room {
 
 //Add funciton to pull copy of arrSize in timer ?
 int arrSize = sizeof(node) / sizeof(node[0]);
-int armedState = 0;
+uint8_t armedState = 0, doArmedOnce = 0;
 // THREAD INITIALISATION
 
 // create the uart thread(s)
@@ -285,313 +285,333 @@ void xbee_rx_thread(void const *argument)
 					tempVal = (tempVal - 500.0) / 10.0;
 					node[i].tempLevel = tempVal;
 					printf("temp level = %d\r\n", node[i].tempLevel);
-					/*Add logic for Armed state here?*/
-					mail_t* varMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
 					
-					//Used to stop constant sending of turn light off in vacant state
-					varMail->slAddress = node[i].slAddress;
-					varMail->myAddress = node[i].myAddress;
-				
-				
-				printf("current pir = %02X / previous pir = %02X", node[i].pirLevel, node[i].prevPirLevel);
-				
-				//Check light 
-				if(node[i].lightOverride == 0){
-					//Someone has entered or room is occupied
-					if(node[i].pirLevel == 1){
-						//Room is occupied
-						if((node[i].prevPirLevel & 0x1) == 1){
-							if(node[i].lightLevel < node[i].lightThreshold){
-								if(node[i].changeCheck[0] == 0){	
-									printf("light is too low so lights on\r\n");
-									varMail->lightState = 1;
-									node[i].changeCheck[0] = 1;
-								}
-								else
-								{
-									printf("nothing has changed so don't care\r\n");
-									varMail->lightState = 2;
-								}
-							}
-							else{
-								if(node[i].changeCheck[0] == 1){
-									printf("light is too high so turning off\r\n");
-									varMail->lightState = 0;
-									node[i].changeCheck[0] = 0;
-								}
-								else{
-									printf("don't care\r\n");
-									varMail->lightState = 2;
-								}
+					
+					
+					if(armedState == 1){
+						//Turn off all heaters etc
+						if(doArmedOnce == 0){
+							doArmedOnce = 1;
+							printf("in armed once area\r\n");
+							for(int j = 0; j <  2; j++){
+								mail_t* armedMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
+								armedMail->slAddress = node[j].slAddress;
+								armedMail->myAddress = node[j].myAddress;
+								armedMail->acState = 0;
+								armedMail->heaterState = 0;
+								armedMail->lightState = 0;
+								osMailPut(mail_box, armedMail);
 							}
 						}
-						//Someone has entered
-						else{
-							if(node[i].lightLevel < node[i].lightThreshold){
-									printf("light is to low so lights on\r\n");
-									node[i].changeCheck[0] = 1;
-									varMail->lightState = 1;
-								}
-								else{
-									printf("light is to high so don't care about state\r\n");
-									varMail->lightState = 2;
-								}
+						if(node[i].pirLevel == 1){
+							printf("!!intruder Alert!!\r\n");
 						}
 					}
-					//Someone has left or room is empty
-					else{
-						//Room is vacant
-						if((node[i].prevPirLevel | 0x0) == 0){
-							if(node[i].changeCheck[0] == 1){
-									printf("turning lights off\r\n");
-									varMail->lightState = 0;
-									node[i].changeCheck[0] = 0;
+					else if (armedState == 0){
+						
+						mail_t* varMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
+						
+						//Used to stop constant sending of turn light off in vacant state
+						varMail->slAddress = node[i].slAddress;
+						varMail->myAddress = node[i].myAddress;
+						
+						//Check light 
+						if(node[i].lightOverride == 0){
+							//Someone has entered or room is occupied
+							if(node[i].pirLevel == 1){
+								//Room is occupied
+								if((node[i].prevPirLevel & 0x1) == 1){
+									if(node[i].lightLevel < node[i].lightThreshold){
+										if(node[i].changeCheck[0] == 0){	
+											printf("light is too low so lights on\r\n");
+											varMail->lightState = 1;
+											node[i].changeCheck[0] = 1;
+										}
+										else
+										{
+											printf("nothing has changed so don't care\r\n");
+											varMail->lightState = 2;
+										}
+									}
+									else{
+										if(node[i].changeCheck[0] == 1){
+											printf("light is too high so turning off\r\n");
+											varMail->lightState = 0;
+											node[i].changeCheck[0] = 0;
+										}
+										else{
+											printf("don't care\r\n");
+											varMail->lightState = 2;
+										}
+									}
 								}
+								//Someone has entered
 								else{
-									printf("vacant and lights off so don't care\r\n");
-									varMail->lightState = 2;
-								}
-						}
-						//Someone has left
-						else{
-							printf("Someone has left\r\n");
-							if(node[i].lightLevel < node[i].lightThreshold){
-								if(node[i].changeCheck[0] == 0){	
-									printf("light is too low so lights on\r\n");
-									varMail->lightState = 1;
-									node[i].changeCheck[0] = 1;
-								}
-								else
-								{
-									printf("nothing has changed so don't care\r\n");
-									varMail->lightState = 2;
+									if(node[i].lightLevel < node[i].lightThreshold){
+											printf("light is to low so lights on\r\n");
+											node[i].changeCheck[0] = 1;
+											varMail->lightState = 1;
+										}
+										else{
+											printf("light is to high so don't care about state\r\n");
+											varMail->lightState = 2;
+										}
 								}
 							}
+							//Someone has left or room is empty
 							else{
-								if(node[i].changeCheck[0] == 1){
-									printf("light is too high so turning off\r\n");
-									varMail->lightState = 0;
-									node[i].changeCheck[0] = 0;
+								//Room is vacant
+								if((node[i].prevPirLevel | 0x0) == 0){
+									if(node[i].changeCheck[0] == 1){
+											printf("turning lights off\r\n");
+											varMail->lightState = 0;
+											node[i].changeCheck[0] = 0;
+										}
+										else{
+											printf("vacant and lights off so don't care\r\n");
+											varMail->lightState = 2;
+										}
 								}
+								//Someone has left
 								else{
-									printf("don't care\r\n");
-									varMail->lightState = 2;
+									printf("Someone has left\r\n");
+									if(node[i].lightLevel < node[i].lightThreshold){
+										if(node[i].changeCheck[0] == 0){	
+											printf("light is too low so lights on\r\n");
+											varMail->lightState = 1;
+											node[i].changeCheck[0] = 1;
+										}
+										else
+										{
+											printf("nothing has changed so don't care\r\n");
+											varMail->lightState = 2;
+										}
+									}
+									else{
+										if(node[i].changeCheck[0] == 1){
+											printf("light is too high so turning off\r\n");
+											varMail->lightState = 0;
+											node[i].changeCheck[0] = 0;
+										}
+										else{
+											printf("don't care\r\n");
+											varMail->lightState = 2;
+										}
+									}
 								}
 							}
 						}
-					}
-				}
-				else{
-					varMail->lightState = 2;
-				}
+						else{
+							varMail->lightState = 2;
+						}
 
 
-				//Check heating  
-				if(node[i].heatingOverride == 0){
-					//Someone has entered or room is occupied
-					if(node[i].pirLevel == 1){
-						//Room is occupied
-						if((node[i].prevPirLevel & 0x1) == 1){
-							//Room too cold
-							if(node[i].tempLevel < node[i].lowerHeatThreshold){
-								//Turning heater on from being off
-								if(node[i].changeCheck[1] == 0){
-									printf("temp is to low so heater on\r\n");
-									varMail->heaterState = 1;
-									varMail->acState = 2;
-									node[i].changeCheck[1] = 1;
+						//Check heating  
+						if(node[i].heatingOverride == 0){
+							//Someone has entered or room is occupied
+							if(node[i].pirLevel == 1){
+								//Room is occupied
+								if((node[i].prevPirLevel & 0x1) == 1){
+									//Room too cold
+									if(node[i].tempLevel < node[i].lowerHeatThreshold){
+										//Turning heater on from being off
+										if(node[i].changeCheck[1] == 0){
+											printf("temp is to low so heater on\r\n");
+											varMail->heaterState = 1;
+											varMail->acState = 2;
+											node[i].changeCheck[1] = 1;
+										}
+										//Turning heater on from being on AC
+										else if(node[i].changeCheck[1] == 2){
+											printf("temp is to low, turning ac off and heater on\r\n");
+											varMail->heaterState = 1;
+											varMail->acState = 0;
+											node[i].changeCheck[1] = 1;
+										}
+										//Don't need to do anything
+										else{
+											printf("don't care\r\n");
+											varMail->acState = 2;
+											varMail->heaterState = 2;
+										}
+									}
+									//Room too hot
+									else if (node[i].tempLevel > node[i].upperHeatThreshold){
+										//Turning ac on from being off
+										if(node[i].changeCheck[1] == 0){
+											printf("temp is to high so ac on\r\n");
+											varMail->heaterState = 2;
+											varMail->acState = 1;
+											node[i].changeCheck[1] = 2;
+										}
+										//Turning heater on from being on AC
+										else if(node[i].changeCheck[1] == 1){
+											printf("temp is to high, turning heater off and ac on\r\n");
+											varMail->heaterState = 0;
+											varMail->acState = 1;
+											node[i].changeCheck[1] = 2;
+										}
+										//Don't need to do anything
+										else{
+											printf("don't care\r\n");
+											varMail->acState = 2;
+											varMail->heaterState = 2;
+										}
+									}
+									//Room just fine
+									else{
+										//Turn off heating
+										if(node[i].changeCheck[1] == 1){
+											printf("temp is fine so turn off heating\r\n");
+											varMail->heaterState = 0;
+											varMail->acState = 2;
+											node[i].changeCheck[1] = 0;
+										}
+										//Turn off ac
+										else if(node[i].changeCheck[1] == 2){
+											printf("temp is fine so turn off ac\r\n");
+											varMail->heaterState = 2;
+											varMail->acState = 0;
+											node[i].changeCheck[1] = 0;
+										}
+										//Nothing needs to be done
+										else{
+											printf("don't care\r\n");
+											varMail->acState = 2;
+											varMail->heaterState = 2;
+										}
+									}
 								}
-								//Turning heater on from being on AC
-								else if(node[i].changeCheck[1] == 2){
-									printf("temp is to low, turning ac off and heater on\r\n");
-									varMail->heaterState = 1;
-									varMail->acState = 0;
-									node[i].changeCheck[1] = 1;
-								}
-								//Don't need to do anything
+								//Someone has entered
 								else{
-									printf("don't care\r\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
+									printf("Someone has entered and ");
+									if(node[i].tempLevel < node[i].lowerHeatThreshold){
+										printf("temp is to low so heater on\r\n");
+										varMail->heaterState = 1;
+										varMail->acState = 2;
+										node[i].changeCheck[1] = 1;
+									}
+									else if(node[i].tempLevel > node[i].upperHeatThreshold){
+										printf("temp is to high so ac on\r\n");
+										varMail->acState = 1;
+										varMail->heaterState = 2;
+										node[i].changeCheck[1] = 2;
+									}
+									else{
+										printf("temp is just right so doing nothing\r\n");
+										varMail->heaterState = 2;
+										varMail->acState = 2;
+									}
 								}
 							}
-							//Room too hot
-							else if (node[i].tempLevel > node[i].upperHeatThreshold){
-								//Turning ac on from being off
-								if(node[i].changeCheck[1] == 0){
-									printf("temp is to high so ac on\r\n");
-									varMail->heaterState = 2;
-									varMail->acState = 1;
-									node[i].changeCheck[1] = 2;
-								}
-								//Turning heater on from being on AC
-								else if(node[i].changeCheck[1] == 1){
-									printf("temp is to high, turning heater off and ac on\r\n");
-									varMail->heaterState = 0;
-									varMail->acState = 1;
-									node[i].changeCheck[1] = 2;
-								}
-								//Don't need to do anything
-								else{
-									printf("don't care\r\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
-								}
-							}
-							//Room just fine
+							//Someone has left or room is empty
 							else{
-								//Turn off heating
-								if(node[i].changeCheck[1] == 1){
-									printf("temp is fine so turn off heating\r\n");
-									varMail->heaterState = 0;
-									varMail->acState = 2;
-									node[i].changeCheck[1] = 0;
+								//Room is vacant
+								if((node[i].prevPirLevel | 0x0) == 0){
+									printf("room is vacant and ");
+									//First time since left then turn off
+									if(node[i].changeCheck[1] == 1){
+										printf("turning heater off\r\n");
+										varMail->heaterState = 0;
+										varMail->acState = 2;
+										node[i].changeCheck[1] = 0;
+									}
+									else if(node[i].changeCheck[1] == 2){
+										printf("turning ac off\r\n");
+										varMail->acState = 0;
+										varMail->heaterState = 2;
+										node[i].changeCheck[1] = 0;
+									}
+									else{
+										printf("don't care\r\n");
+										varMail->acState = 2;
+										varMail->heaterState = 2;
+									}
 								}
-								//Turn off ac
-								else if(node[i].changeCheck[1] == 2){
-									printf("temp is fine so turn off ac\r\n");
-									varMail->heaterState = 2;
-									varMail->acState = 0;
-									node[i].changeCheck[1] = 0;
-								}
-								//Nothing needs to be done
+								//Someone has left
 								else{
-									printf("don't care\r\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
+									//Room too cold
+									if(node[i].tempLevel < node[i].lowerHeatThreshold){
+										//Turning heater on from being off
+										if(node[i].changeCheck[1] == 0){
+											printf("temp is to low so heater on\r\n");
+											varMail->heaterState = 1;
+											varMail->acState = 2;
+											node[i].changeCheck[1] = 1;
+										}
+										//Turning heater on from being on AC
+										else if(node[i].changeCheck[1] == 2){
+											printf("temp is to low, turning ac off and heater on\r\n");
+											varMail->heaterState = 1;
+											varMail->acState = 0;
+											node[i].changeCheck[1] = 1;
+										}
+										//Don't need to do anything
+										else{
+											printf("don't care\r\n");
+											varMail->acState = 2;
+											varMail->heaterState = 2;
+										}
+									}
+									//Room too hot
+									else if (node[i].tempLevel > node[i].upperHeatThreshold){
+										//Turning ac on from being off
+										if(node[i].changeCheck[1] == 0){
+											printf("temp is to high so ac on\r\n");
+											varMail->heaterState = 2;
+											varMail->acState = 1;
+											node[i].changeCheck[1] = 2;
+										}
+										//Turning heater on from being on AC
+										else if(node[i].changeCheck[1] == 1){
+											printf("temp is to high, turning heater off and ac on\r\n");
+											varMail->heaterState = 0;
+											varMail->acState = 1;
+											node[i].changeCheck[1] = 2;
+										}
+										//Don't need to do anything
+										else{
+											printf("don't care\r\n");
+											varMail->acState = 2;
+											varMail->heaterState = 2;
+										}
+									}
+									//Room just fine
+									else{
+										//Turn off heating
+										if(node[i].changeCheck[1] == 1){
+											printf("temp is fine so turn off heating\r\n");
+											varMail->heaterState = 0;
+											varMail->acState = 2;
+											node[i].changeCheck[1] = 0;
+										}
+										//Turn off ac
+										else if(node[i].changeCheck[1] == 2){
+											printf("temp is fine so turn off ac\r\n");
+											varMail->heaterState = 2;
+											varMail->acState = 0;
+											node[i].changeCheck[1] = 0;
+										}
+										//Nothing needs to be done
+										else{
+											printf("don't care\r\n");
+											varMail->acState = 2;
+											varMail->heaterState = 2;
+										}
+									}
 								}
 							}
 						}
-						//Someone has entered
 						else{
-							printf("Someone has entered and ");
-							if(node[i].tempLevel < node[i].lowerHeatThreshold){
-								printf("temp is to low so heater on\r\n");
-								varMail->heaterState = 1;
-								varMail->acState = 2;
-								node[i].changeCheck[1] = 1;
-							}
-							else if(node[i].tempLevel > node[i].upperHeatThreshold){
-								printf("temp is to high so ac on\r\n");
-								varMail->acState = 1;
-								varMail->heaterState = 2;
-								node[i].changeCheck[1] = 2;
-							}
-							else{
-								printf("temp is just right so doing nothing\r\n");
-								varMail->heaterState = 2;
-								varMail->acState = 2;
-							}
+							varMail->heaterState = 2;
+							varMail->acState = 2;
 						}
-					}
-					//Someone has left or room is empty
-					else{
-						//Room is vacant
-						if((node[i].prevPirLevel | 0x0) == 0){
-							printf("room is vacant and ");
-							//First time since left then turn off
-							if(node[i].changeCheck[1] == 1){
-								printf("turning heater off\r\n");
-								varMail->heaterState = 0;
-								varMail->acState = 2;
-								node[i].changeCheck[1] = 0;
-							}
-							else if(node[i].changeCheck[1] == 2){
-								printf("turning ac off\r\n");
-								varMail->acState = 0;
-								varMail->heaterState = 2;
-								node[i].changeCheck[1] = 0;
-							}
-							else{
-								printf("don't care\r\n");
-								varMail->acState = 2;
-								varMail->heaterState = 2;
-							}
-						}
-						//Someone has left
-						else{
-							//Room too cold
-							if(node[i].tempLevel < node[i].lowerHeatThreshold){
-								//Turning heater on from being off
-								if(node[i].changeCheck[1] == 0){
-									printf("temp is to low so heater on\r\n");
-									varMail->heaterState = 1;
-									varMail->acState = 2;
-									node[i].changeCheck[1] = 1;
-								}
-								//Turning heater on from being on AC
-								else if(node[i].changeCheck[1] == 2){
-									printf("temp is to low, turning ac off and heater on\r\n");
-									varMail->heaterState = 1;
-									varMail->acState = 0;
-									node[i].changeCheck[1] = 1;
-								}
-								//Don't need to do anything
-								else{
-									printf("don't care\r\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
-								}
-							}
-							//Room too hot
-							else if (node[i].tempLevel > node[i].upperHeatThreshold){
-								//Turning ac on from being off
-								if(node[i].changeCheck[1] == 0){
-									printf("temp is to high so ac on\r\n");
-									varMail->heaterState = 2;
-									varMail->acState = 1;
-									node[i].changeCheck[1] = 2;
-								}
-								//Turning heater on from being on AC
-								else if(node[i].changeCheck[1] == 1){
-									printf("temp is to high, turning heater off and ac on\r\n");
-									varMail->heaterState = 0;
-									varMail->acState = 1;
-									node[i].changeCheck[1] = 2;
-								}
-								//Don't need to do anything
-								else{
-									printf("don't care\r\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
-								}
-							}
-							//Room just fine
-							else{
-								//Turn off heating
-								if(node[i].changeCheck[1] == 1){
-									printf("temp is fine so turn off heating\r\n");
-									varMail->heaterState = 0;
-									varMail->acState = 2;
-									node[i].changeCheck[1] = 0;
-								}
-								//Turn off ac
-								else if(node[i].changeCheck[1] == 2){
-									printf("temp is fine so turn off ac\r\n");
-									varMail->heaterState = 2;
-									varMail->acState = 0;
-									node[i].changeCheck[1] = 0;
-								}
-								//Nothing needs to be done
-								else{
-									printf("don't care\r\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
-								}
-							}
-						}
-					}
-				}
-				else{
-					varMail->heaterState = 2;
-					varMail->acState = 2;
-				}
-					
+							
 						/*RELEASE MUTEXES HERE?*/
-					
+							
 						osMailPut(mail_box, varMail);
-					
-					
+						
+					}	
 				}
 			}			
 		}
@@ -610,12 +630,15 @@ void xbee_rx_thread(void const *argument)
 
 
 void action_thread(void const *argument){
-	
-	uint8_t template_Dig_Out[] = {0x7E, 0x00, 0x10, 0x17, 0x01, 0x00, 0x13, 0xA2, 0x00, 
+	uint8_t const hard_Set_Packet[] = {0x7E, 0x00, 0x10, 0x17, 0x01, 0x00, 0x13, 0xA2, 0x00, 
 		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x02, 0x44, 0x32, 0x04, 0x00};
+	
+	uint8_t template_Dig_Out[20] = {0};
+		
 	uint8_t lightPin = 0x32, heaterPin = 0x35, acPin = 0x36;
 	uint8_t setLow = 0x4, setHigh = 0x5;
-		
+	uint8_t n = sizeof(hard_Set_Packet)/sizeof(hard_Set_Packet[0]);
+	
 	while(1){
 		//idle until action event
 		osEvent evt = osMailGet(mail_box, osWaitForever);
@@ -628,19 +651,28 @@ void action_thread(void const *argument){
 											1 = turn on
 											2 = don't care / do nothing
 			*/
-			if(armedState == 0){
-				
+			
 				//Create packet
+
+			for (int i = 0; i < 20; i++){
+				template_Dig_Out[i] = hard_Set_Packet[i];
+			}
+			
+			
 				//Set SH
-				template_Dig_Out[9] = (0xFF000000 & mail->slAddress) >> 24;
-				template_Dig_Out[10] = (0x00FF0000 & mail->slAddress) >> 16;
-				template_Dig_Out[11] = (0x0000FF00 & mail->slAddress) >> 8;
-				template_Dig_Out[12] = (0x000000FF & mail->slAddress);
 				
-				//Set MY
-				template_Dig_Out[13] = (0xFF00 & mail->myAddress) >> 8;
-				template_Dig_Out[14] = (0xFF & mail->myAddress);
+					template_Dig_Out[9] = (0xFF000000 & mail->slAddress) >> 24;
+					template_Dig_Out[10] = (0x00FF0000 & mail->slAddress) >> 16;
+					template_Dig_Out[11] = (0x0000FF00 & mail->slAddress) >> 8;
+					template_Dig_Out[12] = (0x000000FF & mail->slAddress);
+					
+					//Set MY
+					template_Dig_Out[13] = (0xFF00 & mail->myAddress) >> 8;
+					template_Dig_Out[14] = (0xFF & mail->myAddress);
 				
+
+				
+			
 				//Send Light
 				if(mail->lightState != 2){
 					printf("Attempting to turn light pin ");
@@ -757,12 +789,7 @@ void action_thread(void const *argument){
 				printf("lighting state = %d\r\n", mail->lightState);
 				printf("heater state = %d\r\n", mail->heaterState);
 				printf("ac state = %d\r\n", mail->acState);
-				
-			}
-			//Alarm stuff
-			else{
-				
-			}
+
 			/*FREE MUTEX HERE?*/
 			osMailFree(mail_box, mail);
 		}
@@ -838,6 +865,7 @@ void poll_Button_Inputs(void const *arg){
 				/*!TURN ON ARMING SYSTEM!*/
 				printf("Arming System Now!\r\n");
 				armedState = 1;
+				doArmedOnce = 0;
 			}
 			countdownTimestamp = 1;
 		}
