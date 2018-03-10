@@ -168,11 +168,6 @@
           <WinNumber>1</WinNumber>
           <ItemText>lastDebounce</ItemText>
         </Ww>
-        <Ww>
-          <count>4</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>evt</ItemText>
-        </Ww>
       </WatchWindow1>
       <Tracepoint>
         <THDelay>0</THDelay>
