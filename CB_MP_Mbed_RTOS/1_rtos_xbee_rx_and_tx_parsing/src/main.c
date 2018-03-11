@@ -128,7 +128,7 @@ int main()
 	send_xbee(init_dig_3, 20);
 	osDelay(1000);
 	send_xbee(init_dig_4, 20);
-	osDelay(2000);
+	osDelay(1000);
 	send_xbee(ic_packet, 20);
 	osDelay(1000);
 	print_debug("... done!", 9);

@@ -43,20 +43,23 @@ osThreadDef(action_thread, osPriorityNormal, 1, 0);
 
 // setup a message queue to use for receiving characters from the interrupt
 // callback
-osMessageQDef(message_q, 255, uint8_t);
+osMessageQDef(message_q, 2000, uint8_t);
 osMessageQId msg_q;
 
 // set up the mail queues
-osMailQDef(mail_box, 16, mail_t);
+osMailQDef(mail_box, 50, mail_t);
 osMailQId  mail_box;
 
 //Timer definition
 void poll_Button_Inputs(void const *arg);
 osTimerDef(poll_Button_In, poll_Button_Inputs);
 
+void thresh_over_checker(void const *arg);
+osTimerDef(thresh_over_ch, thresh_over_checker);
 
 // Semaphores & Mutexes
-
+osMutexDef (thresh_over_state);    
+osMutexId  (thresh_over_state_id);
 
 //GPIO defines
 
@@ -89,12 +92,16 @@ struct Room {
 	uint8_t	pirLevel;
 	uint8_t	prevPirLevel;
 	uint8_t changeCheck[2];
+	uint8_t overThreshButtonState;
+	uint64_t lastTimeStamp;
 	
 }node[4];
 
 //Add funciton to pull copy of arrSize in timer ?
 int arrSize = sizeof(node) / sizeof(node[0]);
 uint8_t armedState = 0, doArmedOnce = 0;
+
+uint64_t systemUptime = 0;
 // THREAD INITIALISATION
 
 // create the uart thread(s)
@@ -111,7 +118,11 @@ int init_xbee_threads(void)
 	mail_box = osMailCreate(osMailQ(mail_box), NULL);
 
 	//create mutexes
-
+	thresh_over_state_id = osMutexCreate(osMutex(thresh_over_state));
+	if (thresh_over_state_id != NULL){
+    printf("thresh mutex created \n");
+  }   
+	
 	// create the threads and get their task id
 	tid_xbee_rx_thread = osThreadCreate(osThread(xbee_rx_thread), NULL);
 	tid_action_thread = osThreadCreate(osThread(action_thread), NULL);
@@ -125,6 +136,9 @@ int init_xbee_threads(void)
 	
 	osTimerId pollButton = osTimerCreate(osTimer(poll_Button_In), osTimerPeriodic, NULL);
 	osTimerStart(pollButton, 20);
+	
+	osTimerId threshOverCheck = osTimerCreate(osTimer(thresh_over_ch), osTimerPeriodic, NULL);
+	osTimerStart(threshOverCheck, 50);
 	
 	// check if everything worked ...
 	if(!tid_xbee_rx_thread)
@@ -168,6 +182,7 @@ void xbee_rx_thread(void const *argument)
 		node[i].prevPirLevel = 0;
 		node[i].changeCheck[0] = 0;
 		node[i].changeCheck[1] = 0;
+		node[i].overThreshButtonState = 2;
 	}	
 	
 	// infinite loop ...
@@ -227,18 +242,46 @@ void xbee_rx_thread(void const *argument)
 					printf("Node %d SL Address = %08X\n", i, node[i].slAddress);
 					printf("Node %d Network Address = %04X\n", i, node[i].myAddress);
 					
-					//Setup output pins low
-					mail_t* setupMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
-					setupMail->slAddress = node[i].slAddress;
-					setupMail->myAddress = node[i].myAddress;
-					setupMail->acState = 0;
-					setupMail->heaterState = 0;
-					setupMail->lightState = 0;
-					osMailPut(mail_box, setupMail);
 					i++;
 					
 				/*RELEASE MUTEX HERE?*/
 				}
+				
+				//IO Data sample RX Indicator Processing
+				if(packet[3] == 0x92){
+					uint8_t buttonCheck = (packet[20] >> 4) & 0x1;
+					
+					if(buttonCheck == 0x0){
+						//identify Relevant address
+						uint16_t myAddress = packet[12];
+						myAddress = myAddress << 8;
+						myAddress = myAddress | packet[13];
+						
+						int i = 0;
+						for (i = 0; i < arrSize; i++){
+							if (myAddress == node[i].myAddress){
+								break;
+							}
+						}
+						
+						printf("in IO proc section\n");
+						
+						osStatus threshWait = osMutexWait(thresh_over_state_id, 0);
+						if (threshWait != osOK)  {
+							printf("Something went wrong with the Mutex\n");
+						}
+						
+						node[i].overThreshButtonState ++;
+						node[i].lastTimeStamp = systemUptime;
+						
+						threshWait = osMutexRelease(thresh_over_state_id);
+						
+						printf("Button state = %d, last timestamp = %llu\n",node[i].overThreshButtonState,node[i].lastTimeStamp);
+					}
+				}
+				
+				
+				
 				
 				//IS packet processing
 				if(packet[15] == 0x49 && packet[16] == 0x53){
@@ -783,6 +826,8 @@ void poll_Button_Inputs(void const *arg){
 	static uint16_t passcodeBuffer = 0;
 	static uint8_t armingVar = 0, timeTillArm = 10, countdownTimestamp = 1, timeout = 1;
 	
+	systemUptime = systemUptime + 20;
+	
 	//Check for timeout on passcode entry
 	if(timeout >= 200){
 		passcodeBuffer = 0;
@@ -851,3 +896,10 @@ void poll_Button_Inputs(void const *arg){
 	timeout ++;
 }
 
+void thresh_over_checker(void const *arg){
+	
+	if((systemUptime % 200) == 0){
+		printf("Uptime = %llu", systemUptime);
+	}
+	
+}
