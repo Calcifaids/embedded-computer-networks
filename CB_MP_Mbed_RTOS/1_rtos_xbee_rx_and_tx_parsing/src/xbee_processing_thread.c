@@ -43,7 +43,7 @@ osThreadDef(action_thread, osPriorityNormal, 1, 0);
 
 // setup a message queue to use for receiving characters from the interrupt
 // callback
-osMessageQDef(message_q, 128, uint8_t);
+osMessageQDef(message_q, 255, uint8_t);
 osMessageQId msg_q;
 
 // set up the mail queues
@@ -56,12 +56,7 @@ osTimerDef(poll_Button_In, poll_Button_Inputs);
 
 
 // Semaphores & Mutexes
-osMutexDef(address_mutex);
-osMutexId(address_val_mutex);
-osMutexDef(sensor_mutex);
-osMutexId(sensor_val_mutex);
-osMutexDef(armed_mutex);
-osMutexId(armed_state_mutex);
+
 
 //GPIO defines
 
@@ -95,7 +90,7 @@ struct Room {
 	uint8_t	prevPirLevel;
 	uint8_t changeCheck[2];
 	
-}node[2];
+}node[4];
 
 //Add funciton to pull copy of arrSize in timer ?
 int arrSize = sizeof(node) / sizeof(node[0]);
@@ -116,9 +111,6 @@ int init_xbee_threads(void)
 	mail_box = osMailCreate(osMailQ(mail_box), NULL);
 
 	//create mutexes
-	sensor_val_mutex = osMutexCreate(osMutex(sensor_mutex));
-	address_val_mutex = osMutexCreate(osMutex(address_mutex));
-	armed_state_mutex = osMutexCreate(osMutex(armed_mutex));
 
 	// create the threads and get their task id
 	tid_xbee_rx_thread = osThreadCreate(osThread(xbee_rx_thread), NULL);
@@ -163,8 +155,8 @@ void xbee_rx_thread(void const *argument)
 		node[i].id = i;
 		node[i].slAddress = 0;
 		node[i].myAddress = 0;
-		node[i].upperHeatThreshold = 15;
-		node[i].lowerHeatThreshold = 14;
+		node[i].upperHeatThreshold = 18;
+		node[i].lowerHeatThreshold = 17;
 		node[i].lightThreshold = 40;
 		node[i].lightPwm = 255;
 		node[i].heatingOverride = 0;
@@ -183,7 +175,7 @@ void xbee_rx_thread(void const *argument)
 	{
 		// wait for there to be something in the message queue
 		osEvent evt = osMessageGet(msg_q, osWaitForever);
-		
+
 		// process the message queue ...
 		if(evt.status == osEventMessage)
 		{
@@ -205,6 +197,7 @@ void xbee_rx_thread(void const *argument)
 				
 				// display the packet
 				int i = 0;
+				
 				for(i = 0; i < len; i++)
 				{
 					printf("%02X ", packet[i]);
@@ -253,7 +246,6 @@ void xbee_rx_thread(void const *argument)
 					address = address << 8;
 					address = address | packet[14]; 
 					
-					/*MUTEX HERE?*/
 					int i = 0;
 					for (i = 0; i < arrSize; i++){
 						if (address == node[i].myAddress){
@@ -261,7 +253,6 @@ void xbee_rx_thread(void const *argument)
 						}
 					}
 					
-					/*ANOTHER MUTEX HERE?*/
 					
 					printf("Values for %02X:\n", node[i].myAddress);
 					//Set PIR val
@@ -648,8 +639,9 @@ void action_thread(void const *argument){
 		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x02, 0x44, 0x32, 0x04, 0x00};
 	
 	uint8_t template_Dig_Out[20] = {0};
-		
-	uint8_t lightPin = 0x32, heaterPin = 0x35, acPin = 0x36;
+	
+	
+	uint8_t lightPin = 0x35, heaterPin = 0x31, acPin = 0x37, dPrefix = 0x44, pPrefix = 0x50;
 	uint8_t setLow = 0x4, setHigh = 0x5;
 	
 	while(1){
@@ -686,6 +678,7 @@ void action_thread(void const *argument){
 				if(mail->lightState != 2){
 					printf("Turning light pin ");
 					//set pin
+					template_Dig_Out[16] = dPrefix;
 					template_Dig_Out[17] = lightPin;
 					//set pin state based on passed value
 					if (mail->lightState == 0){
@@ -717,6 +710,7 @@ void action_thread(void const *argument){
 				if(mail->heaterState != 2){
 					printf("Turning heat pin ");
 					//set pin
+					template_Dig_Out[16] = pPrefix;
 					template_Dig_Out[17] = heaterPin;
 					//set pin state based on passed value
 					if (mail->heaterState == 0){
@@ -747,6 +741,7 @@ void action_thread(void const *argument){
 				if(mail->acState != 2){
 					printf("Turning ac pin ");
 					//set pin
+					template_Dig_Out[16] = dPrefix;
 					template_Dig_Out[17] = acPin;
 					//set pin state based on passed value
 					if (mail->acState == 0){
@@ -772,7 +767,7 @@ void action_thread(void const *argument){
 				
 					send_xbee(template_Dig_Out, 20);
 				}
-
+				
 			/*FREE MUTEX HERE?*/
 			osMailFree(mail_box, mail);
 		}
