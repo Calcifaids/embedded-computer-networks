@@ -21,6 +21,7 @@
 // mail data structure
 typedef struct 
 {
+	uint8_t 	isCommand;
 	uint32_t	slAddress;
 	uint16_t	myAddress;
   uint8_t		lightState;

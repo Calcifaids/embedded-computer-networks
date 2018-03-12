@@ -258,7 +258,7 @@ void xbee_rx_thread(void const *argument)
 				
 				//IO Data sample RX Indicator Processing
 				if(packet[3] == 0x92){
-					
+					static uint64_t timeCheck;
 					uint16_t myAddress = packet[12];
 					myAddress = myAddress << 8;
 					myAddress = myAddress | packet[13];
@@ -294,8 +294,9 @@ void xbee_rx_thread(void const *argument)
 					//Button press
 					else if(len == 22){
 						uint8_t buttonCheck = (packet[20] >> 4) & 0x1;
-						if(buttonCheck == 0x0){
-							
+						if(buttonCheck == 0x0 && systemUptime > timeCheck + 1000){
+							printf("sending IS\n");
+							timeCheck = systemUptime;
 							//Identify array element tied to address
 							int i = 0;
 							for (i = 0; i < arrSize; i++){
@@ -303,16 +304,48 @@ void xbee_rx_thread(void const *argument)
 									break;
 								}
 							}
-							//Send for IS packet based on address
-							//printf("hello\n");
+							//propogate and send to mail action thread to create and send IS packet
+							mail_t* isMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
+							isMail->isCommand = 1;
+							isMail->acState = 2;
+							isMail->heaterState = 2;
+							isMail->lightState = 2;
+							isMail->slAddress = node[i].slAddress;
+							isMail->myAddress = node[i].myAddress;
+							osMailPut(mail_box, isMail);
 							
-							thresh_over_mail* threshValMail = (thresh_over_mail*) osMailAlloc(thresh_over_box, osWaitForever);
-							threshValMail->addrArrayElem = i;
-							threshValMail->adcVal = 10;
-							osMailPut(thresh_over_box, threshValMail);
 						}
 					}
-				}			
+				}
+				//IS processing
+				
+				if(packet[15] == 0x49 && packet[16] == 0x53){
+					
+					
+					//Get address
+					uint16_t myAddress = packet[13];
+					myAddress = myAddress << 8;
+					myAddress = myAddress | packet[14];
+					
+					int i = 0;
+					for (i = 0; i < arrSize; i++){
+						if (myAddress == node[i].myAddress){
+							break;
+						}
+					}
+					//Push payload into mailqueue for handling
+					thresh_over_mail* threshValMail = (thresh_over_mail*) osMailAlloc(thresh_over_box, osWaitForever);
+					
+					threshValMail->addrArrayElem = i;
+					//Pot payload in [28]-[29]
+					uint16_t adcPayload = packet[28];
+					adcPayload = adcPayload << 8;
+					adcPayload = adcPayload | packet[29];
+					threshValMail->adcVal = adcPayload;
+					
+					osMailPut(thresh_over_box, threshValMail);					
+				}
+				
 			}
 			else if (evt.status == osEventTimeout){
 				printf("trying to re-enable interrupts\n");
@@ -356,14 +389,146 @@ void action_thread(void const *argument){
 											2 = don't care / do nothing
 			*/
 			
+			//send DIO command
+			if(mail->isCommand == 0){
 				//Create packet
+				for (int i = 0; i < 20; i++){
+					template_Dig_Out[i] = hard_Set_Packet[i];
+				}
 
-			for (int i = 0; i < 20; i++){
-				template_Dig_Out[i] = hard_Set_Packet[i];
+					//Set SH
+					
+					template_Dig_Out[9] = (0xFF000000 & mail->slAddress) >> 24;
+					template_Dig_Out[10] = (0x00FF0000 & mail->slAddress) >> 16;
+					template_Dig_Out[11] = (0x0000FF00 & mail->slAddress) >> 8;
+					template_Dig_Out[12] = (0x000000FF & mail->slAddress);
+					
+					//Set MY
+					template_Dig_Out[13] = (0xFF00 & mail->myAddress) >> 8;
+					template_Dig_Out[14] = (0xFF & mail->myAddress);
+					
+					//Send Light
+					if(mail->lightState != 2){
+						printf("Turning light pin ");
+						//set pin
+						template_Dig_Out[16] = dPrefix;
+						template_Dig_Out[17] = lightPin;
+						//set pin state based on passed value
+						if (mail->lightState == 0){
+							template_Dig_Out[18] = setLow;
+							printf("off ");
+						}
+						else if(mail->lightState == 1){
+							template_Dig_Out[18] = setHigh;
+							printf("on ");
+						}
+						
+						printf("for net addr = %02X%02X\n", template_Dig_Out[13], template_Dig_Out[14]);
+						//set checksum
+						/*CHANGE TO FUNCTION*/
+						uint16_t checksum = 0;
+						//itterate through values
+						for (int i = 3; i < 19; i++){
+							checksum = checksum + template_Dig_Out[i];
+						}
+
+						//strip down to 8 bit number
+						checksum = checksum & 0xff;
+						template_Dig_Out[19] = 0xFF - checksum;
+						
+						printf("sending: ");
+						for(int i = 0; i < 20; i++){
+							printf("%02X ", template_Dig_Out[i]);
+						}
+						printf("\r\n");
+						
+						send_xbee(template_Dig_Out, 20);
+					}
+									
+					//Send Heater
+					if(mail->heaterState != 2){
+						printf("Turning heat pin ");
+						//set pin
+						template_Dig_Out[16] = pPrefix;
+						template_Dig_Out[17] = heaterPin;
+						//set pin state based on passed value
+						if (mail->heaterState == 0){
+							template_Dig_Out[18] = setLow;
+							printf("off ");
+						}
+						else if(mail->heaterState == 1){
+							template_Dig_Out[18] = setHigh;
+							printf("on ");
+						}
+						
+						printf("for net addr = %02X%02X\n", template_Dig_Out[13], template_Dig_Out[14]);
+						//set checksum
+						uint16_t checksum = 0;
+						//itterate through values
+						for (int i = 3; i < 19; i++){
+							checksum = checksum + template_Dig_Out[i];
+						}
+						
+						//strip down to 8 bit number
+						checksum = checksum & 0xff;
+						template_Dig_Out[19] = 0xFF - checksum;
+						
+						printf("sending: ");
+						for(int i = 0; i < 20; i++){
+							printf("%02X ", template_Dig_Out[i]);
+						}
+						printf("\r\n");
+						send_xbee(template_Dig_Out, 20);
+					}
+					
+					//Send Heater
+					if(mail->acState != 2){
+						printf("Turning ac pin ");
+						//set pin
+						template_Dig_Out[16] = dPrefix;
+						template_Dig_Out[17] = acPin;
+						//set pin state based on passed value
+						if (mail->acState == 0){
+							template_Dig_Out[18] = setLow;
+							printf("off ");
+						}
+						else if(mail->acState == 1){
+							template_Dig_Out[18] = setHigh;
+							printf("on ");
+						}
+						
+						printf("for net addr = %02X%02X\n", template_Dig_Out[13], template_Dig_Out[14]);
+						//set checksum
+						uint16_t checksum = 0;
+						//itterate through values
+						for (int i = 3; i < 19; i++){
+							checksum = checksum + template_Dig_Out[i];
+						}
+						
+						//strip down to 8 bit number
+						checksum = checksum & 0xff;
+						template_Dig_Out[19] = 0xFF - checksum;
+						
+						printf("sending: ");
+						for(int i = 0; i < 20; i++){
+							printf("%02X ", template_Dig_Out[i]);
+						}
+						printf("\r\n");
+						
+						send_xbee(template_Dig_Out, 20);
+				}
 			}
-
-				//Set SH
+			//send IS packet
+			else if(mail->isCommand == 1){
+				//7E 00 0F 17 01 00 13 A2 00 41 72 FC C9 79 1A 02 49 53 89
+				for (int i = 0; i < 19; i++){
+					template_Dig_Out[i] = hard_Set_Packet[i];
+				}
 				
+				//Set length
+				template_Dig_Out[2] = 0x0F;
+				
+				//set SL
 				template_Dig_Out[9] = (0xFF000000 & mail->slAddress) >> 24;
 				template_Dig_Out[10] = (0x00FF0000 & mail->slAddress) >> 16;
 				template_Dig_Out[11] = (0x0000FF00 & mail->slAddress) >> 8;
@@ -373,117 +538,27 @@ void action_thread(void const *argument){
 				template_Dig_Out[13] = (0xFF00 & mail->myAddress) >> 8;
 				template_Dig_Out[14] = (0xFF & mail->myAddress);
 				
-				//Send Light
-				if(mail->lightState != 2){
-					printf("Turning light pin ");
-					//set pin
-					template_Dig_Out[16] = dPrefix;
-					template_Dig_Out[17] = lightPin;
-					//set pin state based on passed value
-					if (mail->lightState == 0){
-						template_Dig_Out[18] = setLow;
-						printf("off ");
-					}
-					else if(mail->lightState == 1){
-						template_Dig_Out[18] = setHigh;
-						printf("on ");
-					}
-					
-					printf("for net addr = %02X%02X\n", template_Dig_Out[13], template_Dig_Out[14]);
-					//set checksum
-					/*CHANGE TO FUNCTION*/
-					uint16_t checksum = 0;
-					//itterate through values
-					for (int i = 3; i < 19; i++){
-						checksum = checksum + template_Dig_Out[i];
-					}
-
-					//strip down to 8 bit number
-					checksum = checksum & 0xff;
-					template_Dig_Out[19] = 0xFF - checksum;
-					
-					printf("sending: ");
-					for(int i = 0; i < 20; i++){
-						printf("%02X ", template_Dig_Out[i]);
-					}
-					printf("\r\n");
-					
-					send_xbee(template_Dig_Out, 20);
-				}
-								
-				//Send Heater
-				if(mail->heaterState != 2){
-					printf("Turning heat pin ");
-					//set pin
-					template_Dig_Out[16] = pPrefix;
-					template_Dig_Out[17] = heaterPin;
-					//set pin state based on passed value
-					if (mail->heaterState == 0){
-						template_Dig_Out[18] = setLow;
-						printf("off ");
-					}
-					else if(mail->heaterState == 1){
-						template_Dig_Out[18] = setHigh;
-						printf("on ");
-					}
-					
-					printf("for net addr = %02X%02X\n", template_Dig_Out[13], template_Dig_Out[14]);
-					//set checksum
-					uint16_t checksum = 0;
-					//itterate through values
-					for (int i = 3; i < 19; i++){
-						checksum = checksum + template_Dig_Out[i];
-					}
-					
-					//strip down to 8 bit number
-					checksum = checksum & 0xff;
-					template_Dig_Out[19] = 0xFF - checksum;
-					
-					printf("sending: ");
-					for(int i = 0; i < 20; i++){
-						printf("%02X ", template_Dig_Out[i]);
-					}
-					printf("\r\n");
-					send_xbee(template_Dig_Out, 20);
+				template_Dig_Out[16] = 0x49;
+				template_Dig_Out[17] = 0x53;
+				uint16_t checksum = 0;
+				
+				//itterate through values
+				for (int i = 3; i < 18; i++){
+					checksum = checksum + template_Dig_Out[i];
 				}
 				
-				//Send Heater
-				if(mail->acState != 2){
-					printf("Turning ac pin ");
-					//set pin
-					template_Dig_Out[16] = dPrefix;
-					template_Dig_Out[17] = acPin;
-					//set pin state based on passed value
-					if (mail->acState == 0){
-						template_Dig_Out[18] = setLow;
-						printf("off ");
-					}
-					else if(mail->acState == 1){
-						template_Dig_Out[18] = setHigh;
-						printf("on ");
-					}
-					
-					printf("for net addr = %02X%02X\n", template_Dig_Out[13], template_Dig_Out[14]);
-					//set checksum
-					uint16_t checksum = 0;
-					//itterate through values
-					for (int i = 3; i < 19; i++){
-						checksum = checksum + template_Dig_Out[i];
-					}
-					
-					//strip down to 8 bit number
-					checksum = checksum & 0xff;
-					template_Dig_Out[19] = 0xFF - checksum;
-					
-					printf("sending: ");
-					for(int i = 0; i < 20; i++){
-						printf("%02X ", template_Dig_Out[i]);
-					}
-					printf("\r\n");
-					
-					send_xbee(template_Dig_Out, 20);
-				}
+				//strip down to 8 bit number
+				checksum = checksum & 0xff;
+				template_Dig_Out[18] = 0xFF - checksum;
 				
+				printf("sending: ");
+				for(int i = 0; i < 19; i++){
+					printf("%02X ", template_Dig_Out[i]);
+				}
+				printf("\r\n");
+				
+				send_xbee(template_Dig_Out, 19);
+			}
 			osMailFree(mail_box, mail);
 		}
 	}
@@ -618,6 +693,7 @@ void process_ir_thread(void const *argument){
 						currentPirLevel[i] = 0;
 						mail_t* armedMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
 						//Change to broadcast?
+						armedMail->isCommand = 0;
 						armedMail->slAddress = node[i].slAddress;
 						armedMail->myAddress = node[i].myAddress;
 						armedMail->acState = 0;
@@ -635,6 +711,7 @@ void process_ir_thread(void const *argument){
 			}
 			else{
 				mail_t* varMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
+				varMail->isCommand = 0;
 				varMail->slAddress = node[procValMail->addrArrayElem].slAddress;
 				varMail->myAddress = node[procValMail->addrArrayElem].myAddress;
 				printf("slAd: %02X, myAdd: %02x\n", varMail->slAddress, varMail->myAddress);
@@ -728,6 +805,7 @@ void process_ir_thread(void const *argument){
 					}
 				}
 				else{
+					printf("override enabled\n");
 					varMail->lightState = 2;
 				}
 				//Process based on Temp
@@ -929,9 +1007,11 @@ void process_ir_thread(void const *argument){
 					}
 				}
 				else{
+					printf("override enabled\n");
 					varMail->heaterState = 2;
 					varMail->acState = 2;
 				}
+				printf("\nSystem-uptime = %llu\n", systemUptime);
 				osMailPut(mail_box, varMail);
 			}
 			osMailFree(proc_box, procValMail);
@@ -942,10 +1022,8 @@ void process_ir_thread(void const *argument){
 
 
 void thresh_over_thread(void const *argument){
-	static uint8_t threshFlag[4];
-	static uint8_t selector[4];
-	int fillerAdc;
-	
+	static uint8_t threshFlag[2] = {0};
+	static uint8_t selector[2] = {0};
 	
 	while (1){
 		
@@ -953,30 +1031,116 @@ void thresh_over_thread(void const *argument){
 			
 		if(evt.status == osEventMail){
 			thresh_over_mail *threshValMail = (thresh_over_mail*)evt.value.p;
+			uint16_t myAddress = node[threshValMail->addrArrayElem].myAddress;
+			printf("Setting for %02X\n", myAddress);
+			//remap Potentiometer to percent
+			float potVal = threshValMail->adcVal;
+			potVal = (potVal - 0) * (100 - 1) / (940 - 0) + 1;
+			if (potVal < 0){
+				potVal = 0;
+			}
+			else if (potVal > 100){
+				potVal = 100;
+			}
 			
-			printf("Addr: %d, Adc: %d\n",threshValMail->addrArrayElem, threshValMail->adcVal);
+			if(threshFlag[threshValMail->addrArrayElem] == 1){
+				threshFlag[threshValMail->addrArrayElem] = 0;
+				printf("Button presed a second time, setting threshold\n");
+			}
+			else if(potVal < 25){
+			//Start timer
+			threshFlag[threshValMail->addrArrayElem] = 1;
+				printf("Button presed once, moving to threshold setting\n");
+			}
+			//Toggle override based on selector
+			else if(potVal >= 25 && potVal < 66){
+				//Make Mailbox
+				mail_t* overrideMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
+				overrideMail->isCommand = 0;
+				overrideMail->slAddress = node[threshValMail->addrArrayElem].slAddress;
+				overrideMail->myAddress = node[threshValMail->addrArrayElem].myAddress;
+				switch(selector[threshValMail->addrArrayElem]){
+					case 0:
+						printf("Light override ");
+						if(node[threshValMail->addrArrayElem].lightOverride == 0){
+							node[threshValMail->addrArrayElem].lightOverride = 1;
+							overrideMail->lightState = 1;
+							overrideMail->acState = 2;
+							overrideMail->heaterState = 2;
+							printf("on\n");
+							//Mail to set light on
+						}
+						else{
+							node[threshValMail->addrArrayElem].lightOverride = 0;
+							printf("off\n");
+							//Mail to set light off
+						}
+						break;
+					case 1:
+						printf("Heating ");
+						if(node[threshValMail->addrArrayElem].heatingOverride == 0){
+							overrideMail->lightState = 2;
+							overrideMail->acState = 0;
+							overrideMail->heaterState = 1;
+							node[threshValMail->addrArrayElem].heatingOverride = 1;
+							node[threshValMail->addrArrayElem].acOverride = 0;
+							printf("on\n");
+							//Mail to set heater on & AC off
+						}
+						else{
+							node[threshValMail->addrArrayElem].heatingOverride = 0;
+							overrideMail->lightState = 2;
+							overrideMail->acState = 0;
+							overrideMail->heaterState = 0;
+							printf("off\n");
+							//Mail to set heater off
+						}
+						break;
+					case 2:
+						
+						printf("AC ");
+						if(node[threshValMail->addrArrayElem].acOverride == 0){
+							overrideMail->lightState = 2;
+							overrideMail->acState = 1;
+							overrideMail->heaterState = 0;
+							node[threshValMail->addrArrayElem].acOverride = 1;
+							node[threshValMail->addrArrayElem].heatingOverride = 0;
+							printf("on\n");
+							//Mail to set AC on & heater off
+						}
+						else{
+							node[threshValMail->addrArrayElem].acOverride = 0;
+							overrideMail->lightState = 2;
+							overrideMail->acState = 0;
+							overrideMail->heaterState = 0;
+							printf("off\n");
+							//Mail to set AC off
+						}
+						break;
+				}
+				osMailPut(mail_box, overrideMail);
+			}
+			//itterate through selector
+			else if(potVal >= 66){
+				selector[threshValMail->addrArrayElem] ++;
+				if(selector[threshValMail->addrArrayElem] == 3){
+					selector[threshValMail->addrArrayElem] = 0;
+				}
+				printf("Selector for %02X set to ", myAddress);
+				switch(selector[threshValMail->addrArrayElem]){
+					case 0:
+						printf("light\n");
+						break;
+					case 1:
+						printf("heating\n");
+						break;
+					case 2:
+						printf("AC\n");
+						break;
+				}
+			}
 			
 			osMailFree(thresh_over_box, threshValMail);
 		}
-		
-		
-		//wait for message
-		/*
-		//map adc to 0-100
-		if(threshFlag[i] == 1){
-			//set threshold
-			threshFlag[i] = 0;
-		}
-		else if(fillerAdc < 34){
-			//Start timer
-			threshFlag[i] = 1;
-		}
-		else if(fillerAdc >= 34 && fillerAdc < 66){
-			//Toggle override of selector
-		}
-		else if(fillerAdc >= 66){
-			//itterate selector
-		}
-		*/
 	}
 }
