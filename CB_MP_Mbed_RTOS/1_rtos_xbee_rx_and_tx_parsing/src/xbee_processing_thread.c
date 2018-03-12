@@ -100,7 +100,7 @@ struct Room {
 	uint8_t overThreshButtonState;
 	uint64_t lastTimeStamp;
 	
-}node[4];
+}node[2];
 
 //Add funciton to pull copy of arrSize in timer ?
 int arrSize = sizeof(node) / sizeof(node[0]);
@@ -295,13 +295,21 @@ void xbee_rx_thread(void const *argument)
 					else if(len == 22){
 						uint8_t buttonCheck = (packet[20] >> 4) & 0x1;
 						if(buttonCheck == 0x0){
+							
+							//Identify array element tied to address
+							int i = 0;
+							for (i = 0; i < arrSize; i++){
+								if (myAddress == node[i].myAddress){
+									break;
+								}
+							}
 							//Send for IS packet based on address
-							printf("hello\n");
-							/*
+							//printf("hello\n");
+							
 							thresh_over_mail* threshValMail = (thresh_over_mail*) osMailAlloc(thresh_over_box, osWaitForever);
 							threshValMail->addrArrayElem = i;
 							threshValMail->adcVal = 10;
-							osMailPut(thresh_over_box, threshValMail);*/
+							osMailPut(thresh_over_box, threshValMail);
 						}
 					}
 				}			
@@ -605,13 +613,13 @@ void process_ir_thread(void const *argument){
 				if(doArmedOnce == 0){
 					doArmedOnce = 1;
 					//Reset PIR
-					for (int i = 0; i < 4; i++){
+					for (int i = 0; i < 2; i++){
 						prevPirLevel[i] = 0;
 						currentPirLevel[i] = 0;
 						mail_t* armedMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
 						//Change to broadcast?
-						armedMail->slAddress = node[procValMail->addrArrayElem].slAddress;
-						armedMail->myAddress = node[procValMail->addrArrayElem].myAddress;
+						armedMail->slAddress = node[i].slAddress;
+						armedMail->myAddress = node[i].myAddress;
 						armedMail->acState = 0;
 						armedMail->heaterState = 0;
 						armedMail->lightState = 0;
@@ -934,10 +942,10 @@ void process_ir_thread(void const *argument){
 
 
 void thresh_over_thread(void const *argument){
-	//static uint8_t threshFlag[4] = {0};
-	//static uint8_t selector[4] = {0};
-	//int fillerAdc;
-	//Set all thresholds to 0 at start
+	static uint8_t threshFlag[4];
+	static uint8_t selector[4];
+	int fillerAdc;
+	
 	
 	while (1){
 		
