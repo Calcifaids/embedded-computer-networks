@@ -106,13 +106,13 @@ int main()
 	// set up the xbee uart at 9600 baud and enable the rx interrupts
 	init_xbee(9600);
 	enable_rx_interrupt();
+	
 	 
-	
-	// print debugging message
-	osDelay(50);
-	
-	// start everything running
-	osKernelStart();
+	// initialise our threads
+	 osDelay(50);
+	print_debug("initialising xbee thread", 24);
+	init_xbee_threads();
+	 
 	
 	// wait for the coordinator xbee to settle down, and then send the 
 	// configuration packets
@@ -130,19 +130,19 @@ int main()
 	osDelay(1000);
 	print_debug("... done!", 9);
 	
-	print_debug("initialising xbee thread", 24);
-	
-	// initialise our threads
-	init_xbee_threads();
-	
+
 	//Setup Addressing for nodes
 	osDelay(1000);
 	send_xbee(my_packet, 19);
 	osDelay(1000);
 	send_xbee(ic_packet, 20);
 	osDelay(1000);
+	//Change to itterate through
 	send_xbee(ir_packet, 24); 
-
+	osDelay(1000);
+	
+	// start everything running
+	osKernelStart();
 	
 }
 

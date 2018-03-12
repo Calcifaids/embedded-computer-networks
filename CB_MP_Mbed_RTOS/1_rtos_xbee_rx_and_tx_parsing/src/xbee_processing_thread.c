@@ -359,7 +359,7 @@ void action_thread(void const *argument){
 		
 		if(evt.status == osEventMail){
 			mail_t *mail = (mail_t*)evt.value.p;
-			/*MUTEX HERE?*/
+			/*GRAB MUTEX HERE*/
 			/*
 			Three states - 	0 = turn off
 											1 = turn on
@@ -382,8 +382,10 @@ void action_thread(void const *argument){
 				//Set MY
 				template_Dig_Out[13] = (0xFF00 & mail->myAddress) >> 8;
 				template_Dig_Out[14] = (0xFF & mail->myAddress);
-			
+				
 				//Send Light
+				osMutexWait(thresh_over_state_id, osWaitForever);
+			
 				if(mail->lightState != 2){
 					printf("Turning light pin ");
 					//set pin
@@ -413,6 +415,7 @@ void action_thread(void const *argument){
 					template_Dig_Out[19] = 0xFF - checksum;
 
 					send_xbee(template_Dig_Out, 20);
+					osDelay(5);
 				}
 				
 				//Send Heater
@@ -442,8 +445,9 @@ void action_thread(void const *argument){
 					//strip down to 8 bit number
 					checksum = checksum & 0xff;
 					template_Dig_Out[19] = 0xFF - checksum;
-
+					
 					send_xbee(template_Dig_Out, 20);
+					osDelay(5);
 				}
 				
 				//Send Heater
@@ -475,9 +479,11 @@ void action_thread(void const *argument){
 					template_Dig_Out[19] = 0xFF - checksum;
 				
 					send_xbee(template_Dig_Out, 20);
+					osDelay(5);
 				}
 				
 			/*FREE MUTEX HERE?*/
+				osMutexRelease(thresh_over_state_id);
 			osMailFree(mail_box, mail);
 		}
 	}

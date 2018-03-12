@@ -140,6 +140,7 @@ int xbee_parse_packet(uint8_t c)
 			// set the state to INIT ready to parse the next packet
 			state = INIT;
 			return xbee_buffer.num_bytes;
+			/*!RELEASE MUTEX HERE?!*/
 		}
 	}
 	return 0;
