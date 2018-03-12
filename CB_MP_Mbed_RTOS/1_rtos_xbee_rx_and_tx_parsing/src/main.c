@@ -36,9 +36,6 @@ gpio_pin_t led = {PI_3, GPIOI, GPIO_PIN_3};
 // Declare Threads Here!!
 extern int init_xbee_threads(void);
 
-//Timer definition
-void poll_Xbee_Inputs(void const *arg);
-osTimerDef(poll_Xbee_in, poll_Xbee_Inputs);
 
 // OVERRIDE HAL DELAY
 // make HAL_Delay point to osDelay (otherwise any use of HAL_Delay breaks things)
@@ -47,7 +44,13 @@ void HAL_Delay(__IO uint32_t Delay)
   osDelay(Delay);
 }
 
-// XBEE
+// XBEE PINOUT AS FOLLOWS
+// ADC: 	DIO0-LDR / DIO1-Temp / DIO2-Pot
+// Din: 	DIO3-PIR / DIO4-Button
+// Dout:	DIO5-Light / DIO7-AC / DIO11-Heater
+
+
+
 // set up adc on dio 0 on all xbees connected to the WPAN - Light
 uint8_t init_adc_0[] = {0x7E, 0x00, 0x10, 0x17, 0x01, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFE, 0x02, 0x44, 0x30, 0x02, 0x74};
@@ -69,10 +72,9 @@ uint8_t init_dig_4[] = {0x7E, 0x00, 0x10, 0x17, 0x01, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFE, 0x02, 0x44, 0x34, 0x03, 0x6F};
 
 
-
-
-
-
+//Sampling packet with freq set to 2s
+uint8_t ir_packet[]  = {0x7E, 0x00, 0x11, 0x17, 0x01, 0x00, 0x00, 0x00, 0x00, 
+	0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFE, 0x02, 0x49, 0x52, 0x07, 0xD0, 0x78};
 
 // packet to do queried sampling (note - analog / digital ios must be 
 // configured before this is sent or we will get an error status)
@@ -89,7 +91,7 @@ uint8_t ic_packet[] = {0x7E, 0x00, 0x10, 0x17, 0x01, 0x00, 0x00, 0x00, 0x00,
 
 // this is the main method
 int main()
-{	
+ {	
 	// initialise the real time kernel
 	osKernelInitialize();
 	
@@ -104,20 +106,17 @@ int main()
 	// set up the xbee uart at 9600 baud and enable the rx interrupts
 	init_xbee(9600);
 	enable_rx_interrupt();
+	 
 	
 	// print debugging message
 	osDelay(50);
-	print_debug("initialising xbee thread", 24);
-		
-	// initialise our threads
-	init_xbee_threads();
+	
 	// start everything running
 	osKernelStart();
 	
 	// wait for the coordinator xbee to settle down, and then send the 
 	// configuration packets
 	print_debug("sending configuration packets", 29);
-	
 	osDelay(1000);
 	send_xbee(init_adc_0, 20);
 	osDelay(1000);
@@ -129,23 +128,21 @@ int main()
 	osDelay(1000);
 	send_xbee(init_dig_4, 20);
 	osDelay(1000);
-	send_xbee(ic_packet, 20);
-	osDelay(1000);
 	print_debug("... done!", 9);
+	
+	print_debug("initialising xbee thread", 24);
+	
+	// initialise our threads
+	init_xbee_threads();
 	
 	//Setup Addressing for nodes
 	osDelay(1000);
 	send_xbee(my_packet, 19);
-	init_gpio(led, OUTPUT);
+	osDelay(1000);
+	send_xbee(ic_packet, 20);
+	osDelay(1000);
+	send_xbee(ir_packet, 24); 
+
 	
-
-	osTimerId pollXbee = osTimerCreate(osTimer(poll_Xbee_in), osTimerPeriodic, NULL);
-	osTimerStart(pollXbee, 2000);
-
-	// start everything running
-	//osKernelStart();
 }
 
-void poll_Xbee_Inputs(void const *arg){
-	send_xbee(is_packet, 19);
-}

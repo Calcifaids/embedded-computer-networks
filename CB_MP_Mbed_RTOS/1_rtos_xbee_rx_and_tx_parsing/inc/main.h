@@ -29,4 +29,16 @@ typedef struct
 } 
 mail_t;
 
+typedef struct{
+	uint8_t		addrArrayElem;
+	uint8_t		pirVal;
+	uint16_t	ldrVal;
+	uint16_t	tempVal;
+} proc_mail;
+
+typedef struct{
+	uint8_t		addrArrayElem;
+	uint16_t	adcVal;
+} thresh_over_mail;
+
 #endif // MAIN_H

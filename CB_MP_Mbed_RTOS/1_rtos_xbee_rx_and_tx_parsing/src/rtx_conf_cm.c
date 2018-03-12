@@ -81,7 +81,7 @@
 //   <i> Initialize thread stack with watermark pattern for analyzing stack usage (current/maximum) in System and Thread Viewer.
 //   <i> Enabling this option increases significantly the execution time of osThreadCreate.
 #ifndef OS_STKINIT
-#define OS_STKINIT      0
+#define OS_STKINIT      1
 #endif
  
 //   <o>Processor mode for thread execution 
@@ -184,7 +184,7 @@
 //   <i> when they are called from the interrupt handler.
 //   <i> Default: 16 entries
 #ifndef OS_FIFOSZ
- #define OS_FIFOSZ      16
+ #define OS_FIFOSZ      96
 #endif
  
 // </h>
