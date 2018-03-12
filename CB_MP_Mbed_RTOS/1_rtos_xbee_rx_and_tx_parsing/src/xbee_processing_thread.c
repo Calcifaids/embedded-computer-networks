@@ -35,11 +35,11 @@
 // declare the thread function prototypes, thread id, and priority
 void xbee_rx_thread(void const *argument);
 osThreadId tid_xbee_rx_thread;
-osThreadDef(xbee_rx_thread, osPriorityAboveNormal, 1, 0);
+osThreadDef(xbee_rx_thread, osPriorityNormal, 1, 0);
 
 void process_ir_thread(void const *argument);
 osThreadId tid_process_ir_thread;
-osThreadDef(process_ir_thread, osPriorityNormal, 1, 0);
+osThreadDef(process_ir_thread, osPriorityBelowNormal, 1, 0);
 
 void action_thread(void const *argument);
 osThreadId tid_action_thread;
@@ -47,20 +47,20 @@ osThreadDef(action_thread, osPriorityNormal, 1, 0);
 
 void thresh_over_thread(void const *argument);
 osThreadId tid_thresh_over_thread;
-osThreadDef(thresh_over_thread, osPriorityNormal, 1, 0);
+osThreadDef(thresh_over_thread, osPriorityBelowNormal, 1, 0);
 
 
 // setup a message queue to use for receiving characters from the interrupt
 // callback
-osMessageQDef(message_q, 2000, uint8_t);
+osMessageQDef(message_q, 254, uint8_t);
 osMessageQId msg_q;
 
 // set up the mail queues
-osMailQDef(mail_box, 50, mail_t);
+osMailQDef(mail_box, 32, mail_t);
 osMailQId  mail_box;
-osMailQDef(proc_box, 50, proc_mail);
+osMailQDef(proc_box, 32, proc_mail);
 osMailQId  proc_box;
-osMailQDef(thresh_over_box, 50, thresh_over_mail);
+osMailQDef(thresh_over_box, 32, thresh_over_mail);
 osMailQId	thresh_over_box;
 
 //Timer definition
@@ -203,10 +203,7 @@ void xbee_rx_thread(void const *argument)
 	{
 		// wait for there to be something in the message queue
 		osEvent evt = osMessageGet(msg_q, osWaitForever);
-		osStatus rxStatus = osMutexWait(xbee_rx_lock_id, osWaitForever);
-		if (rxStatus != osOK){
-			printf("Something has gone wrong acquiring the RX mutex\n");
-		}
+
 		// process the message queue ...
 		if(evt.status == osEventMessage)
 		{
@@ -227,9 +224,9 @@ void xbee_rx_thread(void const *argument)
 				get_packet(packet);
 				
 				// display the packet
-				int i = 0;
 				
-				for(i = 0; i < len; i++)
+				
+				for(int i = 0; i < len; i++)
 				{
 					printf("%02X ", packet[i]);
 				}
@@ -239,7 +236,7 @@ void xbee_rx_thread(void const *argument)
 				
 				//Packet is MY command implying new node
 				if(packet[15] == 0x4D && packet[16] == 0x59){
-					static int i;
+					static int myId;
 					uint32_t slAddress = packet[9];
 					
 					//itterate to gain SL address
@@ -247,16 +244,16 @@ void xbee_rx_thread(void const *argument)
 						slAddress = slAddress << 8;
 						slAddress = slAddress | packet[j];
 					}
-					node[i].slAddress = slAddress; 
+					node[myId].slAddress = slAddress; 
 					
 					uint16_t myAddress = packet[18];
 					myAddress = myAddress << 8;
 					myAddress = myAddress | packet[19]; 
-					node[i].myAddress = myAddress;
-					printf("Node %d SL Address = %08X\n", i, node[i].slAddress);
-					printf("Node %d Network Address = %04X\n", i, node[i].myAddress);
+					node[myId].myAddress = myAddress;
+					printf("Node %d SL Address = %08X\n", myId, node[myId].slAddress);
+					printf("Node %d Network Address = %04X\n", myId, node[myId].myAddress);
 					//Set all low here
-					i++;
+					myId++;
 				}
 				
 				//IO Data sample RX Indicator Processing
@@ -265,20 +262,23 @@ void xbee_rx_thread(void const *argument)
 					uint16_t myAddress = packet[12];
 					myAddress = myAddress << 8;
 					myAddress = myAddress | packet[13];
-					
-					//Identify array element tied to address
-					int i = 0;
-					for (i = 0; i < arrSize; i++){
-						if (myAddress == node[i].myAddress){
-							break;
-						}
-					}
-						
+											
 					//Normal Packet
 					if(len >= 28){
+						//Identify array element tied to address
+						int i = 0;
+						for (i = 0; i < arrSize; i++){
+							if (myAddress == node[i].myAddress){
+								break;
+							}
+						}
+						
 						//Pass to another thread to process
 						proc_mail* procValMail = (proc_mail*) osMailAlloc(proc_box, osWaitForever);
 						procValMail->addrArrayElem = i;
+						procValMail->slAddress = node[i].slAddress;
+						procValMail->myAddress = myAddress;
+						
 						procValMail->pirVal = (packet[20] & 0x8)>> 3;
 						
 						uint16_t ldrVal = packet[21];
@@ -296,40 +296,21 @@ void xbee_rx_thread(void const *argument)
 						uint8_t buttonCheck = (packet[20] >> 4) & 0x1;
 						if(buttonCheck == 0x0){
 							//Send for IS packet based on address
+							printf("hello\n");
+							/*
 							thresh_over_mail* threshValMail = (thresh_over_mail*) osMailAlloc(thresh_over_box, osWaitForever);
 							threshValMail->addrArrayElem = i;
 							threshValMail->adcVal = 10;
-							osMailPut(thresh_over_box, threshValMail);
+							osMailPut(thresh_over_box, threshValMail);*/
 						}
 					}
-					else{
-						printf("unknown packet received\n");
-					}
-//						osStatus threshWait = osMutexWait(thresh_over_state_id, 0);
-//						if (threshWait != osOK)  {
-//							printf("Something went wrong with the Mutex\n");
-//						}
-//						threshWait = osMutexRelease(thresh_over_state_id);
-				}
-
-				//IS packet processing
-				if(packet[15] == 0x49 && packet[16] == 0x53){
-					//pull out address and pir value
-					//post to threshold thread
-				}
-				
-				
-				
-			}			
-		}
-		else if (evt.status == osEventTimeout){
-			printf("trying to re-enable interrupts\n");
-		}
-		rxStatus = osMutexRelease(xbee_rx_lock_id);
-		if (rxStatus != osOK){
-			printf("Something has gone wrong releasing the mutex\n");
-		}
-	} 
+				}			
+			}
+			else if (evt.status == osEventTimeout){
+				printf("trying to re-enable interrupts\n");
+			}
+		} 
+	}
 }
 
 
@@ -339,7 +320,7 @@ void xbee_rx_thread(void const *argument)
 //
 //SL bits = array elements 9 -> 12
 //MY bits = array elements 13 -> 14
-//pin bits = array element 17 (Light = 32(D5), Heater = 35(D11), AC = 36(D7))
+//pin bits = array element 17 (Light = 35(D5), Heater = 32(D11), AC = 36(D7))
 //set bits = array element 18 (low = 04, high = 05)
 //Checksum = array element 19
 
@@ -359,7 +340,8 @@ void action_thread(void const *argument){
 		
 		if(evt.status == osEventMail){
 			mail_t *mail = (mail_t*)evt.value.p;
-			/*GRAB MUTEX HERE*/
+	
+			
 			/*
 			Three states - 	0 = turn off
 											1 = turn on
@@ -384,8 +366,6 @@ void action_thread(void const *argument){
 				template_Dig_Out[14] = (0xFF & mail->myAddress);
 				
 				//Send Light
-				osMutexWait(thresh_over_state_id, osWaitForever);
-			
 				if(mail->lightState != 2){
 					printf("Turning light pin ");
 					//set pin
@@ -401,7 +381,7 @@ void action_thread(void const *argument){
 						printf("on ");
 					}
 					
-					printf("for net addr = %02X%02X\r\n", template_Dig_Out[13], template_Dig_Out[14]);
+					printf("for net addr = %02X%02X\n", template_Dig_Out[13], template_Dig_Out[14]);
 					//set checksum
 					/*CHANGE TO FUNCTION*/
 					uint16_t checksum = 0;
@@ -413,11 +393,16 @@ void action_thread(void const *argument){
 					//strip down to 8 bit number
 					checksum = checksum & 0xff;
 					template_Dig_Out[19] = 0xFF - checksum;
-
+					
+					printf("sending: ");
+					for(int i = 0; i < 20; i++){
+						printf("%02X ", template_Dig_Out[i]);
+					}
+					printf("\r\n");
+					
 					send_xbee(template_Dig_Out, 20);
-					osDelay(5);
 				}
-				
+								
 				//Send Heater
 				if(mail->heaterState != 2){
 					printf("Turning heat pin ");
@@ -434,7 +419,7 @@ void action_thread(void const *argument){
 						printf("on ");
 					}
 					
-					printf("for net addr = %02X%02X\r\n", template_Dig_Out[13], template_Dig_Out[14]);
+					printf("for net addr = %02X%02X\n", template_Dig_Out[13], template_Dig_Out[14]);
 					//set checksum
 					uint16_t checksum = 0;
 					//itterate through values
@@ -446,8 +431,12 @@ void action_thread(void const *argument){
 					checksum = checksum & 0xff;
 					template_Dig_Out[19] = 0xFF - checksum;
 					
+					printf("sending: ");
+					for(int i = 0; i < 20; i++){
+						printf("%02X ", template_Dig_Out[i]);
+					}
+					printf("\r\n");
 					send_xbee(template_Dig_Out, 20);
-					osDelay(5);
 				}
 				
 				//Send Heater
@@ -466,7 +455,7 @@ void action_thread(void const *argument){
 						printf("on ");
 					}
 					
-					printf("for net addr = %02X%02X\r\n", template_Dig_Out[13], template_Dig_Out[14]);
+					printf("for net addr = %02X%02X\n", template_Dig_Out[13], template_Dig_Out[14]);
 					//set checksum
 					uint16_t checksum = 0;
 					//itterate through values
@@ -477,13 +466,16 @@ void action_thread(void const *argument){
 					//strip down to 8 bit number
 					checksum = checksum & 0xff;
 					template_Dig_Out[19] = 0xFF - checksum;
-				
+					
+					printf("sending: ");
+					for(int i = 0; i < 20; i++){
+						printf("%02X ", template_Dig_Out[i]);
+					}
+					printf("\r\n");
+					
 					send_xbee(template_Dig_Out, 20);
-					osDelay(5);
 				}
 				
-			/*FREE MUTEX HERE?*/
-				osMutexRelease(thresh_over_state_id);
 			osMailFree(mail_box, mail);
 		}
 	}
@@ -570,10 +562,17 @@ void poll_Button_Inputs(void const *arg){
 }
 
 void process_ir_thread(void const *argument){
-	static uint8_t prevPirLevel[4] = {0};
-	static uint8_t currentPirLevel[4] = {0};
-	static uint8_t tempChangeCheck[4] = {0};
-	static uint8_t lightChangeCheck[4] = {0};
+	static uint8_t prevPirLevel[4];
+	static uint8_t currentPirLevel[4];
+	static uint8_t tempChangeCheck[4];
+	static uint8_t lightChangeCheck[4];
+	
+	for (int i = 0; i < 4; i++){
+		prevPirLevel[i] = 0;
+		currentPirLevel[i] = 0;
+		tempChangeCheck[i] = 0;
+		lightChangeCheck[i] = 0;
+	}
 		
 	while(1){
 		osEvent evt = osMailGet(proc_box, osWaitForever);
@@ -630,7 +629,7 @@ void process_ir_thread(void const *argument){
 				mail_t* varMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
 				varMail->slAddress = node[procValMail->addrArrayElem].slAddress;
 				varMail->myAddress = node[procValMail->addrArrayElem].myAddress;
-				
+				printf("slAd: %02X, myAdd: %02x\n", varMail->slAddress, varMail->myAddress);
 				//Process based on Light
 				if(node[procValMail->addrArrayElem].lightOverride == 0){
 					//Someone has entered or room is occupied

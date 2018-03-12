@@ -30,7 +30,9 @@ typedef struct
 mail_t;
 
 typedef struct{
-	uint8_t		addrArrayElem;
+	uint8_t 	addrArrayElem;
+	uint32_t	slAddress;
+	uint16_t	myAddress;
 	uint8_t		pirVal;
 	uint16_t	ldrVal;
 	uint16_t	tempVal;
