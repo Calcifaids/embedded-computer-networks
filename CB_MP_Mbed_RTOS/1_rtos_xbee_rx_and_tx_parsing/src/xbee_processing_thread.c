@@ -1057,7 +1057,31 @@ void thresh_over_thread(void const *argument){
 			
 			if(threshFlag[threshValMail->addrArrayElem] == 1){
 				threshFlag[threshValMail->addrArrayElem] = 0;
-				printf("Button presed a second time, setting threshold\n");
+				printf("Button presed a second time.\n");
+				switch(selector[threshValMail->addrArrayElem]){
+					case 0:
+						printf("light threshold set to %f\n", potVal);
+						node[threshValMail->addrArrayElem].lightThreshold = potVal;
+						break;
+					case 1:
+						printf("Heating threshold set to %f\n", potVal);
+						node[threshValMail->addrArrayElem].lowerHeatThreshold = potVal;
+						if (node[threshValMail->addrArrayElem].lowerHeatThreshold >= node[threshValMail->addrArrayElem].upperHeatThreshold){
+							float acSymThresh = potVal + 5;
+							node[threshValMail->addrArrayElem].upperHeatThreshold = acSymThresh;
+							printf("AC threshold auto adjusted to %f\n",  acSymThresh);
+						}
+						break;
+					case 2:
+						printf("AC threshold set to %f\n", potVal);
+						node[threshValMail->addrArrayElem].upperHeatThreshold = potVal;
+						if (node[threshValMail->addrArrayElem].upperHeatThreshold <= node[threshValMail->addrArrayElem].lowerHeatThreshold){
+							float heatSymThresh = potVal - 5;
+							node[threshValMail->addrArrayElem].lowerHeatThreshold = heatSymThresh;
+							printf("heating threshold auto adjusted to %f\n",  heatSymThresh); 
+						}
+						break;
+				}
 			}
 			else if(potVal < 25){
 			//Start timer

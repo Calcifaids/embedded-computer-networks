@@ -168,7 +168,7 @@ int main()
 		printf("!!MUTEX NOT GRABBED AT START!!\n");
 	}
 
-	osDelay(200);
+	osDelay(400);
 	send_xbee(ir_packet, 21); 
 	//send_xbee(ir_addr_0, 21);
 	//osDelay(500);
