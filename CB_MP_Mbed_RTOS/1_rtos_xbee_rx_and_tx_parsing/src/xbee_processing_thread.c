@@ -218,7 +218,7 @@ void xbee_rx_thread(void const *argument)
 			// com port
 			if(len > 0)
 			{
-				printf(">> packet received\r\n");
+				printf(">> packet received @ %llu s\r\n", systemUptime);
 				
 				// get the packet
 				uint8_t packet[len];
@@ -226,14 +226,7 @@ void xbee_rx_thread(void const *argument)
 				
 				// display the packet
 				
-				printf("packet TS = %llu\n", systemUptime);
-				/*for(int i = 0; i < len; i++)
-				{
-					printf("%02X ", packet[i]);
-				}
-				printf("\r\n");
-				*/
-				
+						
 				//Packet Processing
 				
 				//Packet is MY command implying new node
@@ -297,8 +290,8 @@ void xbee_rx_thread(void const *argument)
 					else if(len == 22){
 						//CAUSING USART 6 ORE!!! FIND OUT HOW TO FIX!!
 						uint8_t buttonCheck = (packet[20] >> 4) & 0x1;
-						if(buttonCheck == 0x0 && systemUptime > timeCheck + 1500){
-							printf("sending IS\n");
+						if(buttonCheck == 0x0 && systemUptime > timeCheck + 1){
+							printf("sending IS packet when mutex free\n");
 							timeCheck = systemUptime;
 							//Identify array element tied to address
 							int i = 0;
@@ -350,7 +343,7 @@ void xbee_rx_thread(void const *argument)
 			}
 		}
 		else if (evt.status == osEventTimeout){
-				printf("trying to re-enable interrupts\n");
+				printf("Something has gone, please reset system\n");
 		}		
 	}
 }
@@ -577,8 +570,13 @@ void poll_Button_Inputs(void const *arg){
 	static uint16_t passcodeBuffer = 0;
 	static uint8_t armingVar = 0, timeTillArm = 10, countdownTimestamp = 1, timeout = 1;
 	
-	systemUptime = systemUptime + 20;
+	static int timeIterrate = 0;
 	
+	timeIterrate += 1;
+	if (timeIterrate == 50){
+		systemUptime += 1;
+		timeIterrate = 0;
+	}
 	//Check for timeout on passcode entry
 	if(timeout >= 200){
 		passcodeBuffer = 0;
@@ -682,7 +680,8 @@ void process_ir_thread(void const *argument){
 			float tempVal = procValMail->tempVal;
 			tempVal = tempVal * (1200.0 / 1023.0);
 			tempVal = (tempVal - 500.0) / 10.0;
-
+			printf("Node address: %02X\n",node[procValMail->addrArrayElem].myAddress);
+			printf("Time: %llu s\n",systemUptime);
 			printf("Current PIR:%d, Prev PIR:%d\n",currentPirLevel[procValMail->addrArrayElem], prevPirLevel[procValMail->addrArrayElem]);
 			printf("Light: %f, Temp: %f\n",lightVal, tempVal); 
 			
@@ -1013,7 +1012,7 @@ void process_ir_thread(void const *argument){
 					heaterState = 2;
 					acState = 2;
 				}
-				printf("\nSystem-uptime = %llu\n", systemUptime);
+				printf("\n");
 				if (acState + heaterState + lightState != 6){
 					mail_t* varMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
 					varMail->isCommand = 0;
@@ -1022,7 +1021,6 @@ void process_ir_thread(void const *argument){
 					varMail->lightState = lightState;
 					varMail->acState = acState;
 					varMail->heaterState = heaterState;
-					printf("slAd: %02X, myAdd: %02x\n", varMail->slAddress, varMail->myAddress);
 					osMailPut(mail_box, varMail);
 				}
 			}
@@ -1086,7 +1084,19 @@ void thresh_over_thread(void const *argument){
 			else if(potVal < 25){
 			//Start timer
 			threshFlag[threshValMail->addrArrayElem] = 1;
-				printf("Button presed once, moving to threshold setting\n");
+				printf("Button presed once, Next press will set ");
+				switch(selector[threshValMail->addrArrayElem]){
+					case 0:
+						printf("light ");
+						break;
+					case 1:
+						printf("heating ");
+						break;
+					case 2: 
+						printf("AC ");
+						break;
+				}
+				printf("based on potentiometer value\n");
 			}
 			//Toggle override based on selector
 			else if(potVal >= 25 && potVal < 66){

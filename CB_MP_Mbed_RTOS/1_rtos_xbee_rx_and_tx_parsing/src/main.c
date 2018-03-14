@@ -82,7 +82,7 @@ uint8_t reset_ir_packet[] = {0x7E, 0x00, 0x10, 0x17, 0x01, 0x00, 0x00, 0x00, 0x0
 	
 //Sampling packet with freq set to 6s
 uint8_t ir_packet[]  = {0x7E, 0x00, 0x11, 0x17, 0x01, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFE, 0x02, 0x49, 0x52, 0x17, 0xE8, 0x50};
+	0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFE, 0x02, 0x49, 0x52, 0x17, 0xFC, 0x3C};
 
 //Sampling pakcet with freq set to 6s
 uint8_t ir_addr_0[] = {0x7E, 0x00, 0x11, 0x17, 0x01, 0x00, 0x13, 0xA2, 0x00, 
@@ -168,7 +168,7 @@ int main()
 		printf("!!MUTEX NOT GRABBED AT START!!\n");
 	}
 
-	osDelay(400);
+	osDelay(500);
 	send_xbee(ir_packet, 21); 
 	//send_xbee(ir_addr_0, 21);
 	//osDelay(500);
@@ -190,7 +190,7 @@ void lock_for_receive(void const *arg){
 			printf("mutex released from timer: %llu\n",systemUptime);
 		}
 		else{
-			printf("!!!Mutex not released from timer!!!\n");
+			printf("Mutex not released from timer\n");
 		}
 	}
 	else{
@@ -201,7 +201,7 @@ void lock_for_receive(void const *arg){
 			printf("Mutex Grabbed for timer: %llu\n", systemUptime);
 		}
 		else{
-			printf("!!!mutex was not grabbed in the timer!!!\n");
+			printf("mutex was not grabbed in the timer\n");
 		}
 	}
 	
