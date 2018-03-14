@@ -35,7 +35,11 @@ gpio_pin_t led = {PI_3, GPIOI, GPIO_PIN_3};
 void lock_for_receive(void const *arg);
 osTimerDef(lock_for_rec,lock_for_receive);
 
-extern uint64_t systemUptime;
+void correct_timing(void const *arg);
+osTimerDef(correct_tim, correct_timing);
+osTimerId correctTimerId;
+
+extern uint64_t systemUptime, uptimeCorrection;
 // Declare Threads Here!!
 extern int init_xbee_threads(void);
 
@@ -157,7 +161,9 @@ int main()
 	//send_xbee(ir_packet, 21); 
 	//Start Timer
 	osKernelStart();
-	
+	//Create timer for correction
+	osTimerCreate(osTimer(correct_tim), osTimerPeriodic, NULL);
+	//create and start periodic timer
 	osTimerId lockTimer = osTimerCreate(osTimer(lock_for_rec), osTimerPeriodic, NULL);
 	osTimerStart(lockTimer, 3000);
 	osStatus status = osMutexWait(xbee_rx_lock_id, osWaitForever);
@@ -187,7 +193,7 @@ void lock_for_receive(void const *arg){
 		
 		osStatus status = osMutexRelease(xbee_rx_lock_id);
 		if (status == osOK){
-			printf("mutex released from timer: %llu\n",systemUptime);
+			printf("mutex released from timer: %llu s\n",systemUptime);
 		}
 		else{
 			printf("Mutex not released from timer\n");
@@ -198,11 +204,23 @@ void lock_for_receive(void const *arg){
 		
 		osStatus status = osMutexWait(xbee_rx_lock_id, osWaitForever);
 		if (status == osOK){
-			printf("Mutex Grabbed for timer: %llu\n", systemUptime);
+			printf("Mutex Grabbed for timer: %llu s\n", systemUptime);
+			//Correct for wonky timing events or innacurate oscillators on Xbee
+			if(uptimeCorrection + 3 >= systemUptime){
+				osTimerStart(correctTimerId, 6000);
+				printf("!!!Correcting sampling timing in 6s!!!\n");
+			}
 		}
 		else{
 			printf("mutex was not grabbed in the timer\n");
 		}
 	}
 	
+}
+
+//Resend IR packet
+void correct_timing(void const *arg){
+	osTimerStop(correctTimerId);
+	send_xbee(ir_packet, 21);
+	printf("!!!Correcting sampling timing!!!\n");
 }

@@ -28,7 +28,7 @@
 // include main.h with the mail type declaration
 #include "main.h"
 #include "gpio.h"
-
+#include "stm32746g_discovery_lcd.h"
 
 
 // RTOS DEFINES
@@ -73,8 +73,8 @@ osMutexDef (thresh_over_state);
 osMutexId  (thresh_over_state_id);
 osMutexDef (xbee_rx_lock);
 osMutexId  (xbee_rx_lock_id);
-//GPIO defines
 
+//GPIO defines
 gpio_pin_t pb1 = {PA_8, GPIOA, GPIO_PIN_8};
 gpio_pin_t pb2 = {PA_15, GPIOA, GPIO_PIN_15};
 gpio_pin_t pb3 = {PG_6, GPIOG, GPIO_PIN_6};
@@ -100,14 +100,14 @@ struct Room {
 	uint8_t acOverride;
 	uint8_t overThreshButtonState;
 	uint64_t lastTimeStamp;
-	
+	uint8_t overrideChangeCheck;
 }node[2];
 
-//Add funciton to pull copy of arrSize in timer ?
+
 int arrSize = sizeof(node) / sizeof(node[0]);
 uint8_t armedState = 0, doArmedOnce = 0;
 
-uint64_t systemUptime = 0;
+uint64_t systemUptime = 0, uptimeCorrection;
 
 // THREAD INITIALISATION
 
@@ -150,9 +150,14 @@ int init_xbee_threads(void)
 	init_gpio(pb4, INPUT);
 	init_gpio(alarmOutput, OUTPUT);
 	
+	//Create timer for polling buttons
 	osTimerId pollButton = osTimerCreate(osTimer(poll_Button_In), osTimerPeriodic, NULL);
 	osTimerStart(pollButton, 20);
-		
+	
+
+	//Init LCD
+	
+	
 	// check if everything worked ...
 	if(!tid_xbee_rx_thread)
 	{
@@ -197,6 +202,7 @@ void xbee_rx_thread(void const *argument)
 		node[i].lightOverride = 0;
 		node[i].acOverride = 0;
 		node[i].overThreshButtonState = 2;
+		node[i].overrideChangeCheck = 0;
 	}	
 	
 	// infinite loop ...
@@ -218,7 +224,8 @@ void xbee_rx_thread(void const *argument)
 			// com port
 			if(len > 0)
 			{
-				printf(">> packet received @ %llu s\r\n", systemUptime);
+				uptimeCorrection = systemUptime;
+				printf(">> packet received @ %llu s\r\n", uptimeCorrection);
 				
 				// get the packet
 				uint8_t packet[len];
@@ -234,7 +241,7 @@ void xbee_rx_thread(void const *argument)
 					static int myId;
 					uint32_t slAddress = packet[9];
 					
-					//itterate to gain SL address
+					//itterate to gain SL address and store to first available node
 					for(int j = 10; j < 13; j++){
 						slAddress = slAddress << 8;
 						slAddress = slAddress | packet[j];
@@ -288,8 +295,9 @@ void xbee_rx_thread(void const *argument)
 					}
 					//Button press
 					else if(len == 22){
-						//CAUSING USART 6 ORE!!! FIND OUT HOW TO FIX!!
+						//Can cause UART 6 ORE flag in rare occasions, in which case reset is required (Until a means to reset ORE flag found)
 						uint8_t buttonCheck = (packet[20] >> 4) & 0x1;
+						//Psuedo debounce to prevent multiple IS packets send on button press
 						if(buttonCheck == 0x0 && systemUptime > timeCheck + 1){
 							printf("sending IS packet when mutex free\n");
 							timeCheck = systemUptime;
@@ -420,7 +428,6 @@ void action_thread(void const *argument){
 						
 						printf("for net addr = %02X%02X\n", template_Dig_Out[13], template_Dig_Out[14]);
 						//set checksum
-						/*CHANGE TO FUNCTION*/
 						uint16_t checksum = 0;
 						//itterate through values
 						for (int i = 3; i < 19; i++){
@@ -616,11 +623,16 @@ void poll_Button_Inputs(void const *arg){
 				countdownTimestamp = 1;
 				armingVar = ~armingVar;
 				if(armingVar == 0){
-					/*!TURN OFF ARMING SYSTEM HERE!*/
+					//Turn off arming system
+					osMutexWait(thresh_over_state_id, osWaitForever);
+					for (int j = 0; j < arrSize; j++){
+						node[j].overrideChangeCheck = 1;
+					}
 					timeTillArm = 10;
 					printf("Disarming System Now!\r\n");
 					armedState = 0;
 					write_gpio(alarmOutput, 0);
+					osMutexRelease(thresh_over_state_id);
 				}
 			}
 		}
@@ -634,7 +646,7 @@ void poll_Button_Inputs(void const *arg){
 			timeTillArm --;
 			printf("arming in %d seconds\r\n", timeTillArm);
 			if(timeTillArm == 0){
-				/*!TURN ON ARMING SYSTEM!*/
+				//Turn on arming system
 				printf("Arming System Now!\r\n");
 				armedState = 1;
 				doArmedOnce = 0;
@@ -696,6 +708,7 @@ void process_ir_thread(void const *argument){
 						mail_t* armedMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
 						
 						//Change to broadcast?
+						//Turn off all pins
 						armedMail->isCommand = 0;
 						armedMail->slAddress = node[i].slAddress;
 						armedMail->myAddress = node[i].myAddress;
@@ -714,8 +727,13 @@ void process_ir_thread(void const *argument){
 			}
 			else{
 				uint8_t heaterState = 0, acState = 0, lightState = 0;
-				
-
+				osMutexWait(thresh_over_state_id, osWaitForever);
+				//Reset change checks as override has been turned off so need to ensure states haven't changed
+				if(node[procValMail->addrArrayElem].overrideChangeCheck == 1){
+					lightChangeCheck[procValMail->addrArrayElem] = 0;
+					tempChangeCheck[procValMail->addrArrayElem] = 0;
+					node[procValMail->addrArrayElem].overrideChangeCheck = 0;
+				}
 				//Process based on Light
 				if(node[procValMail->addrArrayElem].lightOverride == 0){
 					//Someone has entered or room is occupied
@@ -1013,6 +1031,7 @@ void process_ir_thread(void const *argument){
 					acState = 2;
 				}
 				printf("\n");
+				//If changes have occured send to action thread
 				if (acState + heaterState + lightState != 6){
 					mail_t* varMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
 					varMail->isCommand = 0;
@@ -1024,6 +1043,7 @@ void process_ir_thread(void const *argument){
 					osMailPut(mail_box, varMail);
 				}
 			}
+			osMutexRelease(thresh_over_state_id);
 			osMailFree(proc_box, procValMail);
 		}
 	}
@@ -1053,6 +1073,8 @@ void thresh_over_thread(void const *argument){
 				potVal = 100;
 			}
 			
+			//Check state of pot + if last button was in lower third
+			//Set new threshold as 2nd click
 			if(threshFlag[threshValMail->addrArrayElem] == 1){
 				threshFlag[threshValMail->addrArrayElem] = 0;
 				printf("Button presed a second time.\n");
@@ -1062,6 +1084,7 @@ void thresh_over_thread(void const *argument){
 						node[threshValMail->addrArrayElem].lightThreshold = potVal;
 						break;
 					case 1:
+						//Re-adjust both heating and AC thresholds if needed
 						printf("Heating threshold set to %f\n", potVal);
 						node[threshValMail->addrArrayElem].lowerHeatThreshold = potVal;
 						if (node[threshValMail->addrArrayElem].lowerHeatThreshold >= node[threshValMail->addrArrayElem].upperHeatThreshold){
@@ -1071,6 +1094,7 @@ void thresh_over_thread(void const *argument){
 						}
 						break;
 					case 2:
+						//Re-adjust both heating and AC thresholds if needed
 						printf("AC threshold set to %f\n", potVal);
 						node[threshValMail->addrArrayElem].upperHeatThreshold = potVal;
 						if (node[threshValMail->addrArrayElem].upperHeatThreshold <= node[threshValMail->addrArrayElem].lowerHeatThreshold){
@@ -1081,6 +1105,7 @@ void thresh_over_thread(void const *argument){
 						break;
 				}
 			}
+			//Register that next click will be new threshold
 			else if(potVal < 25){
 			//Start timer
 			threshFlag[threshValMail->addrArrayElem] = 1;
@@ -1101,6 +1126,7 @@ void thresh_over_thread(void const *argument){
 			//Toggle override based on selector
 			else if(potVal >= 25 && potVal < 66){
 				//Make Mailbox
+				osMutexWait(thresh_over_state_id, osWaitForever);
 				mail_t* overrideMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
 				overrideMail->isCommand = 0;
 				overrideMail->slAddress = node[threshValMail->addrArrayElem].slAddress;
@@ -1117,7 +1143,11 @@ void thresh_over_thread(void const *argument){
 							//Mail to set light on
 						}
 						else{
+							node[threshValMail->addrArrayElem].overrideChangeCheck = 1;
 							node[threshValMail->addrArrayElem].lightOverride = 0;
+							overrideMail->lightState = 0;
+							overrideMail->acState = 2;
+							overrideMail->heaterState = 2;
 							printf("off\n");
 							//Mail to set light off
 						}
@@ -1134,6 +1164,7 @@ void thresh_over_thread(void const *argument){
 							//Mail to set heater on & AC off
 						}
 						else{
+							node[threshValMail->addrArrayElem].overrideChangeCheck = 1;
 							node[threshValMail->addrArrayElem].heatingOverride = 0;
 							overrideMail->lightState = 2;
 							overrideMail->acState = 0;
@@ -1155,6 +1186,7 @@ void thresh_over_thread(void const *argument){
 							//Mail to set AC on & heater off
 						}
 						else{
+							node[threshValMail->addrArrayElem].overrideChangeCheck = 1;
 							node[threshValMail->addrArrayElem].acOverride = 0;
 							overrideMail->lightState = 2;
 							overrideMail->acState = 0;
@@ -1164,6 +1196,7 @@ void thresh_over_thread(void const *argument){
 						}
 						break;
 				}
+				osMutexRelease(thresh_over_state_id);
 				osMailPut(mail_box, overrideMail);
 			}
 			//itterate through selector
