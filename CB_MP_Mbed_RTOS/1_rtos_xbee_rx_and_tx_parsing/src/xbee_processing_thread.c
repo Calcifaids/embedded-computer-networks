@@ -20,6 +20,7 @@
 // include the serial configuration files
 #include "vcom_serial.h"
 #include "xbee.h"
+#include "itm_debug.h"
 
 // include the xbee packet parser
 #include "xbee_packet_parser.h"
@@ -43,7 +44,7 @@ osThreadDef(process_ir_thread, osPriorityBelowNormal, 1, 0);
 
 void action_thread(void const *argument);
 osThreadId tid_action_thread;
-osThreadDef(action_thread, osPriorityNormal, 1, 0);
+osThreadDef(action_thread, osPriorityAboveNormal, 1, 0);
 
 void thresh_over_thread(void const *argument);
 osThreadId tid_thresh_over_thread;
@@ -52,15 +53,15 @@ osThreadDef(thresh_over_thread, osPriorityBelowNormal, 1, 0);
 
 // setup a message queue to use for receiving characters from the interrupt
 // callback
-osMessageQDef(message_q, 254, uint8_t);
+osMessageQDef(message_q, 512, uint8_t);
 osMessageQId msg_q;
 
 // set up the mail queues
-osMailQDef(mail_box, 32, mail_t);
+osMailQDef(mail_box, 64, mail_t);
 osMailQId  mail_box;
-osMailQDef(proc_box, 32, proc_mail);
+osMailQDef(proc_box, 64, proc_mail);
 osMailQId  proc_box;
-osMailQDef(thresh_over_box, 32, thresh_over_mail);
+osMailQDef(thresh_over_box, 64, thresh_over_mail);
 osMailQId	thresh_over_box;
 
 //Timer definition
@@ -225,12 +226,13 @@ void xbee_rx_thread(void const *argument)
 				
 				// display the packet
 				
-				
-				for(int i = 0; i < len; i++)
+				printf("packet TS = %llu\n", systemUptime);
+				/*for(int i = 0; i < len; i++)
 				{
 					printf("%02X ", packet[i]);
 				}
 				printf("\r\n");
+				*/
 				
 				//Packet Processing
 				
@@ -293,8 +295,9 @@ void xbee_rx_thread(void const *argument)
 					}
 					//Button press
 					else if(len == 22){
+						//CAUSING USART 6 ORE!!! FIND OUT HOW TO FIX!!
 						uint8_t buttonCheck = (packet[20] >> 4) & 0x1;
-						if(buttonCheck == 0x0 && systemUptime > timeCheck + 1000){
+						if(buttonCheck == 0x0 && systemUptime > timeCheck + 1500){
 							printf("sending IS\n");
 							timeCheck = systemUptime;
 							//Identify array element tied to address
@@ -304,8 +307,9 @@ void xbee_rx_thread(void const *argument)
 									break;
 								}
 							}
-							//propogate and send to mail action thread to create and send IS packet
+							//propogate and send to mail action thread to create and send IS packetosMutexWait(xbee_rx_lock_id, osWaitForever);
 							mail_t* isMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
+							
 							isMail->isCommand = 1;
 							isMail->acState = 2;
 							isMail->heaterState = 2;
@@ -313,14 +317,12 @@ void xbee_rx_thread(void const *argument)
 							isMail->slAddress = node[i].slAddress;
 							isMail->myAddress = node[i].myAddress;
 							osMailPut(mail_box, isMail);
-							
 						}
 					}
 				}
 				//IS processing
 				
 				if(packet[15] == 0x49 && packet[16] == 0x53){
-					
 					
 					//Get address
 					uint16_t myAddress = packet[13];
@@ -343,14 +345,13 @@ void xbee_rx_thread(void const *argument)
 					adcPayload = adcPayload | packet[29];
 					threshValMail->adcVal = adcPayload;
 					
-					osMailPut(thresh_over_box, threshValMail);					
+					osMailPut(thresh_over_box, threshValMail);
 				}
-				
 			}
-			else if (evt.status == osEventTimeout){
+		}
+		else if (evt.status == osEventTimeout){
 				printf("trying to re-enable interrupts\n");
-			}
-		} 
+		}		
 	}
 }
 
@@ -378,11 +379,12 @@ void action_thread(void const *argument){
 	while(1){
 		//idle until action event
 		osEvent evt = osMailGet(mail_box, osWaitForever);
-		
+		osMutexWait(xbee_rx_lock_id, osWaitForever); 
 		if(evt.status == osEventMail){
 			mail_t *mail = (mail_t*)evt.value.p;
-	
 			
+			
+			printf("Mutex grabbed for sending \n");
 			/*
 			Three states - 	0 = turn off
 											1 = turn on
@@ -520,7 +522,6 @@ void action_thread(void const *argument){
 			}
 			//send IS packet
 			else if(mail->isCommand == 1){
-				//7E 00 0F 17 01 00 13 A2 00 41 72 FC C9 79 1A 02 49 53 89
 				for (int i = 0; i < 19; i++){
 					template_Dig_Out[i] = hard_Set_Packet[i];
 				}
@@ -560,6 +561,8 @@ void action_thread(void const *argument){
 				send_xbee(template_Dig_Out, 19);
 			}
 			osMailFree(mail_box, mail);
+			osMutexRelease(xbee_rx_lock_id);
+			printf("mutex released from sending func\n");
 		}
 	}
 }
@@ -692,6 +695,7 @@ void process_ir_thread(void const *argument){
 						prevPirLevel[i] = 0;
 						currentPirLevel[i] = 0;
 						mail_t* armedMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
+						
 						//Change to broadcast?
 						armedMail->isCommand = 0;
 						armedMail->slAddress = node[i].slAddress;
@@ -710,11 +714,9 @@ void process_ir_thread(void const *argument){
 				}
 			}
 			else{
-				mail_t* varMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
-				varMail->isCommand = 0;
-				varMail->slAddress = node[procValMail->addrArrayElem].slAddress;
-				varMail->myAddress = node[procValMail->addrArrayElem].myAddress;
-				printf("slAd: %02X, myAdd: %02x\n", varMail->slAddress, varMail->myAddress);
+				uint8_t heaterState = 0, acState = 0, lightState = 0;
+				
+
 				//Process based on Light
 				if(node[procValMail->addrArrayElem].lightOverride == 0){
 					//Someone has entered or room is occupied
@@ -725,24 +727,24 @@ void process_ir_thread(void const *argument){
 							if(lightVal < node[procValMail->addrArrayElem].lightThreshold){
 								if(lightChangeCheck[procValMail->addrArrayElem] == 0){	
 									printf("and the light is too low so turning the lights on.\n");
-									varMail->lightState = 1;
+									lightState = 1;
 									lightChangeCheck[procValMail->addrArrayElem] = 1;
 								}
 								else
 								{
 									printf("and nothing has changed.\n");
-									varMail->lightState = 2;
+									lightState = 2;
 								}
 							}
 							else{
 								if(lightChangeCheck[procValMail->addrArrayElem] == 1){
 									printf("and the light is too high so turning the lights off\n");
-									varMail->lightState = 0;
+									lightState = 0;
 									lightChangeCheck[procValMail->addrArrayElem] = 0;
 								}
 								else{
 									printf("and nothing has changed.\n");
-									varMail->lightState = 2;
+									lightState = 2;
 								}
 							}
 						}
@@ -752,11 +754,11 @@ void process_ir_thread(void const *argument){
 							if(lightVal < node[procValMail->addrArrayElem].lightThreshold){
 									printf("and the light is too low so turning the lights on.\n");
 									lightChangeCheck[procValMail->addrArrayElem] = 1;
-									varMail->lightState = 1;
+									lightState = 1;
 								}
 								else{
 									printf("light is too high so don't need to turn the lights on.\n");
-									varMail->lightState = 2;
+									lightState = 2;
 								}
 						}
 					}
@@ -767,12 +769,12 @@ void process_ir_thread(void const *argument){
 							printf("The room is vacant ");
 							if(lightChangeCheck[procValMail->addrArrayElem] == 1){
 									printf("so turning lights off.\n");
-									varMail->lightState = 0;
+									lightState = 0;
 									lightChangeCheck[procValMail->addrArrayElem] = 0;
 								}
 								else{
 									printf("and the lights are already off.\n");
-									varMail->lightState = 2;
+									lightState = 2;
 								}
 						}
 						//Someone has left
@@ -781,24 +783,24 @@ void process_ir_thread(void const *argument){
 							if(lightVal < node[procValMail->addrArrayElem].lightThreshold){
 								if(lightChangeCheck[procValMail->addrArrayElem] == 0){	
 									printf("and the light is too low so turning the lights on.\n");
-									varMail->lightState = 1;
+									lightState = 1;
 									lightChangeCheck[procValMail->addrArrayElem] = 1;
 								}
 								else
 								{
 									printf("and nothing has changed.\n");
-									varMail->lightState = 2;
+									lightState = 2;
 								}
 							}
 							else{
 								if(lightChangeCheck[procValMail->addrArrayElem] == 1){
 									printf("and the light is too high so turning the lights off\n");
-									varMail->lightState = 0;
+									lightState = 0;
 									lightChangeCheck[procValMail->addrArrayElem] = 0;
 								}
 								else{
 									printf("and nothing has changed.\n");
-									varMail->lightState = 2;
+									lightState = 2;
 								}
 							}
 						}
@@ -806,7 +808,7 @@ void process_ir_thread(void const *argument){
 				}
 				else{
 					printf("override enabled\n");
-					varMail->lightState = 2;
+					lightState = 2;
 				}
 				//Process based on Temp
 				if(node[procValMail->addrArrayElem].heatingOverride == 0 && node[procValMail->addrArrayElem].acOverride == 0){
@@ -820,22 +822,22 @@ void process_ir_thread(void const *argument){
 								//Turning heater on from being off
 								if(tempChangeCheck[procValMail->addrArrayElem] == 0){
 									printf("and the temp is too low so turning the heating on.\n");
-									varMail->heaterState = 1;
-									varMail->acState = 2;
+									heaterState = 1;
+									acState = 2;
 									tempChangeCheck[procValMail->addrArrayElem] = 1;
 								}
 								//Turning heater on from being on AC
 								else if(tempChangeCheck[procValMail->addrArrayElem] == 2){
 									printf("and the temp is too low so turning the AC off and the heating on.\n");
-									varMail->heaterState = 1;
-									varMail->acState = 0;
+									heaterState = 1;
+									acState = 0;
 									tempChangeCheck[procValMail->addrArrayElem] = 1;
 								}
 								//Don't need to do anything
 								else{
 									printf("and nothing has changed.\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
+									acState = 2;
+									heaterState = 2;
 								}
 							}
 							//Room too hot
@@ -843,22 +845,22 @@ void process_ir_thread(void const *argument){
 								//Turning ac on from being off
 								if(tempChangeCheck[procValMail->addrArrayElem] == 0){
 									printf("and the temp is too high so turning the AC on.\n");
-									varMail->heaterState = 2;
-									varMail->acState = 1;
+									heaterState = 2;
+									acState = 1;
 									tempChangeCheck[procValMail->addrArrayElem] = 2;
 								}
 								//Turning heater on from being on AC
 								else if(tempChangeCheck[procValMail->addrArrayElem] == 1){
 									printf("and the temp is too high so turning the heating off and the AC on.\n");
-									varMail->heaterState = 0;
-									varMail->acState = 1;
+									heaterState = 0;
+									acState = 1;
 									tempChangeCheck[procValMail->addrArrayElem] = 2;
 								}
 								//Don't need to do anything
 								else{
 									printf("and nothing has changed.\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
+									acState = 2;
+									heaterState = 2;
 								}
 							}
 							//Room just fine
@@ -866,22 +868,22 @@ void process_ir_thread(void const *argument){
 								//Turn off heating
 								if(tempChangeCheck[procValMail->addrArrayElem] == 1){
 									printf("and the temp is fine so turning the heating off.\n");
-									varMail->heaterState = 0;
-									varMail->acState = 2;
+									heaterState = 0;
+									acState = 2;
 									tempChangeCheck[procValMail->addrArrayElem] = 0;
 								}
 								//Turn off ac
 								else if(tempChangeCheck[procValMail->addrArrayElem] == 2){
 									printf("and the temp is fine so turning the AC off.\n");
-									varMail->heaterState = 2;
-									varMail->acState = 0;
+									heaterState = 2;
+									acState = 0;
 									tempChangeCheck[procValMail->addrArrayElem] = 0;
 								}
 								//Nothing needs to be done
 								else{
 									printf("and nothing has changed.\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
+									acState = 2;
+									heaterState = 2;
 								}
 							}
 						}
@@ -890,20 +892,20 @@ void process_ir_thread(void const *argument){
 							printf("Someone has entered the room ");
 							if(tempVal < node[procValMail->addrArrayElem].lowerHeatThreshold){
 								printf("and the temp is too low so turning the heating on.\n");
-								varMail->heaterState = 1;
-								varMail->acState = 2;
+								heaterState = 1;
+								acState = 2;
 								tempChangeCheck[procValMail->addrArrayElem] = 1;
 							}
 							else if(tempVal > node[procValMail->addrArrayElem].upperHeatThreshold){
 								printf("and the temp is too high so turning the AC on.\n");
-								varMail->acState = 1;
-								varMail->heaterState = 2;
+								acState = 1;
+								heaterState = 2;
 								tempChangeCheck[procValMail->addrArrayElem] = 2;
 							}
 							else{
 								printf("and nothing has changed.\n");
-								varMail->heaterState = 2;
-								varMail->acState = 2;
+								heaterState = 2;
+								acState = 2;
 							}
 						}
 					}
@@ -915,20 +917,20 @@ void process_ir_thread(void const *argument){
 							//First time since left then turn off
 							if(tempChangeCheck[procValMail->addrArrayElem] == 1){
 								printf("so turning the heating off.\n");
-								varMail->heaterState = 0;
-								varMail->acState = 2;
+								heaterState = 0;
+								acState = 2;
 								tempChangeCheck[procValMail->addrArrayElem] = 0;
 							}
 							else if(tempChangeCheck[procValMail->addrArrayElem] == 2){
 								printf("so turning the AC off.\n");
-								varMail->acState = 0;
-								varMail->heaterState = 2;
+								acState = 0;
+								heaterState = 2;
 								tempChangeCheck[procValMail->addrArrayElem] = 0;
 							}
 							else{
 								printf("and nothing has changed.\n");
-								varMail->acState = 2;
-								varMail->heaterState = 2;
+								acState = 2;
+								heaterState = 2;
 							}
 						}
 						//Someone has left
@@ -939,22 +941,22 @@ void process_ir_thread(void const *argument){
 								//Turning heater on from being off
 								if(tempChangeCheck[procValMail->addrArrayElem] == 0){
 									printf("and the temp is too low so turning the heating on.\n");
-									varMail->heaterState = 1;
-									varMail->acState = 2;
+									heaterState = 1;
+									acState = 2;
 									tempChangeCheck[procValMail->addrArrayElem] = 1;
 								}
 								//Turning heater on from being on AC
 								else if(tempChangeCheck[procValMail->addrArrayElem] == 2){
 									printf("and the temp is too low so turning the AC off and the heating on.\n");
-									varMail->heaterState = 1;
-									varMail->acState = 0;
+									heaterState = 1;
+									acState = 0;
 									tempChangeCheck[procValMail->addrArrayElem] = 1;
 								}
 								//Don't need to do anything
 								else{
 									printf("and nothing has changed.\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
+									acState = 2;
+									heaterState = 2;
 								}
 							}
 							//Room too hot
@@ -962,22 +964,22 @@ void process_ir_thread(void const *argument){
 								//Turning ac on from being off
 								if(tempChangeCheck[procValMail->addrArrayElem] == 0){
 									printf("and the temp is too high so turning the AC on.\n");
-									varMail->heaterState = 2;
-									varMail->acState = 1;
+									heaterState = 2;
+									acState = 1;
 									tempChangeCheck[procValMail->addrArrayElem] = 2;
 								}
 								//Turning heater on from being on AC
 								else if(tempChangeCheck[procValMail->addrArrayElem] == 1){
 									printf("and the temp is too high so turning the heating off and the AC on.\n");
-									varMail->heaterState = 0;
-									varMail->acState = 1;
+									heaterState = 0;
+									acState = 1;
 									tempChangeCheck[procValMail->addrArrayElem] = 2;
 								}
 								//Don't need to do anything
 								else{
 									printf("and nothing has changed.\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
+									acState = 2;
+									heaterState = 2;
 								}
 							}
 							//Room just fine
@@ -985,22 +987,22 @@ void process_ir_thread(void const *argument){
 								//Turn off heating
 								if(tempChangeCheck[procValMail->addrArrayElem] == 1){
 									printf("and the temp is fine so turning the heating off.\n");
-									varMail->heaterState = 0;
-									varMail->acState = 2;
+									heaterState = 0;
+									acState = 2;
 									tempChangeCheck[procValMail->addrArrayElem] = 0;
 								}
 								//Turn off ac
 								else if(tempChangeCheck[procValMail->addrArrayElem] == 2){
 									printf("and the temp is fine so turning the AC off.\n");
-									varMail->heaterState = 2;
-									varMail->acState = 0;
+									heaterState = 2;
+									acState = 0;
 									tempChangeCheck[procValMail->addrArrayElem] = 0;
 								}
 								//Nothing needs to be done
 								else{
 									printf("and nothing has changed.\n");
-									varMail->acState = 2;
-									varMail->heaterState = 2;
+									acState = 2;
+									heaterState = 2;
 								}
 							}
 						}
@@ -1008,11 +1010,21 @@ void process_ir_thread(void const *argument){
 				}
 				else{
 					printf("override enabled\n");
-					varMail->heaterState = 2;
-					varMail->acState = 2;
+					heaterState = 2;
+					acState = 2;
 				}
 				printf("\nSystem-uptime = %llu\n", systemUptime);
-				osMailPut(mail_box, varMail);
+				if (acState + heaterState + lightState != 6){
+					mail_t* varMail = (mail_t*) osMailAlloc(mail_box, osWaitForever);
+					varMail->isCommand = 0;
+					varMail->slAddress = node[procValMail->addrArrayElem].slAddress;
+					varMail->myAddress = node[procValMail->addrArrayElem].myAddress;
+					varMail->lightState = lightState;
+					varMail->acState = acState;
+					varMail->heaterState = heaterState;
+					printf("slAd: %02X, myAdd: %02x\n", varMail->slAddress, varMail->myAddress);
+					osMailPut(mail_box, varMail);
+				}
 			}
 			osMailFree(proc_box, procValMail);
 		}
