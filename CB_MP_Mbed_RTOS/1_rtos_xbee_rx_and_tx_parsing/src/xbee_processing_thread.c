@@ -224,8 +224,8 @@ void xbee_rx_thread(void const *argument)
 			// com port
 			if(len > 0)
 			{
-				uptimeCorrection = systemUptime;
-				printf(">> packet received @ %llu s\r\n", uptimeCorrection);
+				
+				printf(">> packet received @ %llu s\r\n", systemUptime);
 				
 				// get the packet
 				uint8_t packet[len];
@@ -267,6 +267,7 @@ void xbee_rx_thread(void const *argument)
 											
 					//Normal Packet
 					if(len >= 28){
+						uptimeCorrection = systemUptime;
 						//Identify array element tied to address
 						int i = 0;
 						for (i = 0; i < arrSize; i++){

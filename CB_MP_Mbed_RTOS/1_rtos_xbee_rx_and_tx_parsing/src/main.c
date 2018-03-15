@@ -88,6 +88,9 @@ uint8_t reset_ir_packet[] = {0x7E, 0x00, 0x10, 0x17, 0x01, 0x00, 0x00, 0x00, 0x0
 uint8_t ir_packet[]  = {0x7E, 0x00, 0x11, 0x17, 0x01, 0x00, 0x00, 0x00, 0x00, 
 	0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFE, 0x02, 0x49, 0x52, 0x17, 0xFC, 0x3C};
 
+uint8_t ir_correction[] = {0x7E, 0x00, 0x11, 0x17, 0x01, 0x00, 0x00, 0x00, 0x00, 
+	0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFE, 0x02, 0x49, 0x52, 0x18, 0x06, 0x31};	
+	
 //Sampling pakcet with freq set to 6s
 uint8_t ir_addr_0[] = {0x7E, 0x00, 0x11, 0x17, 0x01, 0x00, 0x13, 0xA2, 0x00, 
 	0x41, 0x72, 0xFC, 0xC9, 0x79, 0x1A, 0x02, 0x49, 0x52, 0x17, 0x70, 0x03};	
@@ -106,6 +109,8 @@ uint8_t my_packet[] = {0x7E, 0x00, 0x0F, 0x17, 0x01, 0x00, 0x00, 0x00, 0x00,
 uint8_t ic_packet[] = {0x7E, 0x00, 0x10, 0x17, 0x01, 0x00, 0x00, 0x00, 0x00, 
 	0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFE, 0x02, 0x49, 0x43, 0x10, 0x4E};
 	
+	
+uint8_t flagOnce = 1;	
 // CODE	
 
 // this is the main method
@@ -162,7 +167,7 @@ int main()
 	//Start Timer
 	osKernelStart();
 	//Create timer for correction
-	osTimerCreate(osTimer(correct_tim), osTimerPeriodic, NULL);
+	correctTimerId = osTimerCreate(osTimer(correct_tim), osTimerPeriodic, NULL);
 	//create and start periodic timer
 	osTimerId lockTimer = osTimerCreate(osTimer(lock_for_rec), osTimerPeriodic, NULL);
 	osTimerStart(lockTimer, 3000);
@@ -206,9 +211,10 @@ void lock_for_receive(void const *arg){
 		if (status == osOK){
 			printf("Mutex Grabbed for timer: %llu s\n", systemUptime);
 			//Correct for wonky timing events or innacurate oscillators on Xbee
-			if(uptimeCorrection + 3 >= systemUptime){
-				osTimerStart(correctTimerId, 6000);
+			if(uptimeCorrection + 3 >= systemUptime & flagOnce == 1){
+				osTimerStart(correctTimerId, 6100);
 				printf("!!!Correcting sampling timing in 6s!!!\n");
+				flagOnce = 0;
 			}
 		}
 		else{
@@ -220,7 +226,14 @@ void lock_for_receive(void const *arg){
 
 //Resend IR packet
 void correct_timing(void const *arg){
-	osTimerStop(correctTimerId);
-	send_xbee(ir_packet, 21);
+	static uint8_t i = 0;
+	if (i == 0){
+		send_xbee(ir_correction, 21);
+	}
+	else{
+		send_xbee(ir_packet, 21);
+	}
 	printf("!!!Correcting sampling timing!!!\n");
+	osTimerStop(correctTimerId);
+	flagOnce = 1;
 }
