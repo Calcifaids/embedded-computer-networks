@@ -44,4 +44,11 @@ typedef struct{
 	uint16_t	adcVal;
 } thresh_over_mail;
 
+typedef struct{
+	
+	uint8_t		addrArrayElem;
+	float			temperature;
+	float			light;
+}	display_mail;
+
 #endif // MAIN_H

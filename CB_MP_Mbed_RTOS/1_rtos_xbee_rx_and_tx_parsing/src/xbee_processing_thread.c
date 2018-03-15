@@ -50,6 +50,9 @@ void thresh_over_thread(void const *argument);
 osThreadId tid_thresh_over_thread;
 osThreadDef(thresh_over_thread, osPriorityBelowNormal, 1, 0);
 
+void display_thread(void const *argument);
+osThreadId tid_display_thread;
+osThreadDef (display_thread, osPriorityBelowNormal, 1, 0);
 
 // setup a message queue to use for receiving characters from the interrupt
 // callback
@@ -63,6 +66,8 @@ osMailQDef(proc_box, 64, proc_mail);
 osMailQId  proc_box;
 osMailQDef(thresh_over_box, 64, thresh_over_mail);
 osMailQId	thresh_over_box;
+osMailQDef(display_box, 64, display_mail);
+osMailQId display_box;
 
 //Timer definition
 void poll_Button_Inputs(void const *arg);
@@ -125,6 +130,8 @@ int init_xbee_threads(void)
 	mail_box = osMailCreate(osMailQ(mail_box), NULL);
 	proc_box = osMailCreate(osMailQ(proc_box), NULL);
 	thresh_over_box = osMailCreate(osMailQ(thresh_over_box), NULL);
+	display_box = osMailCreate(osMailQ(display_box), NULL);
+
 
 	//create mutexes
 	thresh_over_state_id = osMutexCreate(osMutex(thresh_over_state));
@@ -141,6 +148,7 @@ int init_xbee_threads(void)
 	tid_action_thread = osThreadCreate(osThread(action_thread), NULL);
 	tid_thresh_over_thread = osThreadCreate(osThread(thresh_over_thread), NULL);
 	tid_process_ir_thread = osThreadCreate(osThread(process_ir_thread), NULL);
+	tid_display_thread = osThreadCreate(osThread(display_thread), NULL);
 	
 
 	//Init GPIO
@@ -149,6 +157,15 @@ int init_xbee_threads(void)
 	init_gpio(pb3, INPUT);
 	init_gpio(pb4, INPUT);
 	init_gpio(alarmOutput, OUTPUT);
+	
+	//Init Display
+	
+	BSP_LCD_Init();
+  BSP_LCD_LayerDefaultInit(LTDC_ACTIVE_LAYER, SDRAM_DEVICE_ADDR);
+  BSP_LCD_SelectLayer(LTDC_ACTIVE_LAYER);
+	BSP_LCD_Clear(LCD_COLOR_BLACK);
+	BSP_LCD_SetBackColor(LCD_COLOR_BLACK);
+	BSP_LCD_SetFont(&Font24);	
 	
 	//Create timer for polling buttons
 	osTimerId pollButton = osTimerCreate(osTimer(poll_Button_In), osTimerPeriodic, NULL);
@@ -174,6 +191,10 @@ int init_xbee_threads(void)
 	}
 	if(!tid_thresh_over_thread){
 		printf("thresh over thread not created!\r\n");
+		return(-1);
+	}
+	if(!tid_display_thread){
+		printf("Display thread not created!\r\n");
 		return(-1);
 	}
 	
@@ -697,6 +718,14 @@ void process_ir_thread(void const *argument){
 			printf("Time: %llu s\n",systemUptime);
 			printf("Current PIR:%d, Prev PIR:%d\n",currentPirLevel[procValMail->addrArrayElem], prevPirLevel[procValMail->addrArrayElem]);
 			printf("Light: %f, Temp: %f\n",lightVal, tempVal); 
+			
+			/*Post to display*//*
+			display_mail* displayMail = (display_mail*)osMailAlloc(display_box, osWaitForever);
+			displayMail->addrArrayElem = procValMail->addrArrayElem;
+			displayMail->temperature = tempVal;
+			displayMail->light = lightVal;
+			osMailPut(display_box, displayMail);
+			*/
 			
 			if(armedState == 1){
 				static uint8_t doAlertOnce = 0;
@@ -1223,4 +1252,67 @@ void thresh_over_thread(void const *argument){
 			osMailFree(thresh_over_box, threshValMail);
 		}
 	}
+}
+
+
+//Not utilised as only posting once and filling up mail queue for some reason
+
+void display_thread(void const *argument){
+	static int i = 0;
+	static uint16_t addresses[2] = {0};
+	static float temperatures[2] = {0};
+	static float lights[2] = {0};
+	
+	char str[40];
+  char str1[40];
+	char str2[40];	
+		
+	osEvent evt = osMailGet(display_box, osWaitForever);
+			
+	if(evt.status == osEventMail){
+		display_mail *displayMail = (display_mail*)evt.value.p;
+		
+		addresses[displayMail->addrArrayElem] = node[displayMail->addrArrayElem].myAddress;
+		temperatures[displayMail->addrArrayElem] = displayMail->temperature;
+		lights[displayMail->addrArrayElem] = displayMail->light;
+		
+		
+		if (i == 0){
+			//Display room
+			BSP_LCD_Clear(LCD_COLOR_BLACK);
+			BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+			
+			sprintf(str, "Room = %04X", addresses[i]);
+			BSP_LCD_DisplayStringAtLine(1, (uint8_t *)str);
+			
+			sprintf(str1, "Temp = %f", temperatures[i]);
+			BSP_LCD_DisplayStringAtLine(6, (uint8_t *)str1);
+			
+			sprintf(str2, "Light = %f", lights[i]);
+			BSP_LCD_DisplayStringAtLine(8, (uint8_t *)str2);
+			i = 2;
+		}
+		else if( i == 2){
+			i = 1;
+		}else if( i == 1){
+			BSP_LCD_Clear(LCD_COLOR_BLACK);
+			BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+			
+			sprintf(str, "Room = %04X", addresses[i]);
+			BSP_LCD_DisplayStringAtLine(1, (uint8_t *)str);
+			
+			sprintf(str1, "Temp = %f", temperatures[i]);
+			BSP_LCD_DisplayStringAtLine(6, (uint8_t *)str1);
+			
+			sprintf(str2, "Light = %f", lights[i]);
+			BSP_LCD_DisplayStringAtLine(8, (uint8_t *)str2);
+			i = 3;
+		}
+		else if (i == 3){
+			i = 0;
+		}
+
+		osMailFree(display_box, displayMail);
+	}
+	
 }
